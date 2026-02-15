@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import NavBar from './components/NavBar'
 import SearchBar from './components/SearchBar';
@@ -21,6 +21,13 @@ function NewCohortBox(){
     const { socket } = useSocket();
     const [chatNameAvailable, setChatNameAvailable] = useState(null); // null | true | false
     const navigate = useNavigate();
+
+
+    useEffect(() => {
+        if (!accessToken) {
+            navigate('/login');
+        }
+    }, [accessToken]);
 
     const chatNameDebounceRef = useRef(null);
 

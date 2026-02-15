@@ -22,6 +22,13 @@ export default function Settings(){
         setShowToast(true);
     }
 
+    
+    useEffect(() => {
+        if (!accessToken) {
+            navigate('/login');
+        }
+    }, [accessToken]);
+
     useEffect(() => {
         if(!accessToken) return
         fetch('/api/user', {

@@ -4,7 +4,7 @@ import reactImg from "../images/reaction-fontcolor.png";
 import "./ReactionMenu.css";
 import { useAuth } from "../context/AuthContext";
 import { useSocket } from "../context/SocketContext";
-import EmojiPicker from "emoji-picker-react";
+import EmojiPicker, {EmojiStyle} from "emoji-picker-react";
 import { useNavigate } from "react-router-dom";
 import {ReactComponent as MyPlusIcon} from '../images/plus-icon.svg';
 
@@ -183,7 +183,7 @@ function ReactionMenu({ msg, isPost = false, onReactLocal }) {
       {/* Emoji picker */}
       {showEmoji && (
         <div ref={emojiRefs.setFloating} style={{ ...emojiStyles, zIndex: 99999 }}>
-          <EmojiPicker onEmojiClick={handleEmojiClick} theme="dark" defaultSkinTone="white" />
+          <EmojiPicker onEmojiClick={handleEmojiClick} emojiStyle={EmojiStyle.TWITTER} theme="dark" defaultSkinTone="white" />
         </div>
       )}
     </div>

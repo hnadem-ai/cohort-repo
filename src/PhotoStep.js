@@ -177,7 +177,7 @@ export default function ProfilePhotoStep() {
         <p className='profile-photo-step-note'>Note: Your image should be under 2MB.</p>
         <button type='button' onClick={handleUpload} className="upload-btn">
           { uploading ? (
-              <div className='spinner' style={{width: '20px', height: '20px'}}></div>
+              <div className='spinner' style={{width: '20px', height: '20px', borderColor: '#171718'}}></div>
             ) : (
               'Upload Photo'
             )

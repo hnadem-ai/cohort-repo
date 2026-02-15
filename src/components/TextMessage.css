@@ -3,6 +3,10 @@
   transform-origin: bottom left;
 }
 
+.my-media-msg.msg-pop{
+  transform-origin: bottom right;
+}
+
 .my-msg.msg-pop {
   transform-origin: bottom right;
 }

@@ -43,6 +43,12 @@ function Profile(){
     const menuRef = refs.setFloating;
 
     useEffect(() => {
+        if (!accessToken) {
+            navigate('/login');
+        }
+    }, [accessToken]);
+
+    useEffect(() => {
         function handleClickOutside(e) {
             if (
                 open &&

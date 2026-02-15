@@ -489,11 +489,11 @@
   align-items: center;
   justify-content: center;
   border-radius: 4px;
-  gap: 3px;
+  gap: 6px;
 }
 
 .audio-msg-wrapper{
-  height: 70px;
+  height: 45px;
   width: 300px;
 }
 
@@ -510,7 +510,7 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   grid-template-rows: auto auto;
-  gap: 3px;
+  gap: 6px;
   width: 300px;
   height: 300px;
   border-radius: 4px;
@@ -527,7 +527,7 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   grid-template-rows: repeat(2, 1fr);
-  gap: 3px;
+  gap: 6px;
   width: 300px;
   height: 300px;
   border-radius: 4px;
@@ -573,7 +573,7 @@
   width: 100%;
   max-height: 100%;
   max-width: 100%;
-  border-radius: 4px;
+  border-radius: 8px;
   object-fit: cover;
 }
 
@@ -694,12 +694,14 @@
 
 .recording-indicator{
   width: 100%;
-  padding: 10px;
-  border-radius: 6px;
+  margin: 0 10px;
+  padding: 8px 12px;
+  border-radius: 30px;
   border: 1px solid var(--small);
-  background-color: var(--black);
+  background-color: var(--hover);
   color: var(--fontColor);
   display: flex;
+  align-items: center;
   gap: 5px;
 }
 

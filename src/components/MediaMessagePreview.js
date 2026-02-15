@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { useNavigate } from 'react-router-dom';
 
-function MediaMessage({ files, setFiles, selectedChat }){
+function MediaMessage({ files, setFiles, selectedChat, setMessages, isReply, repliedTo, setIsReply, setRepliedTo }){
     const { socket } = useSocket();
     const filesArr = Array.from(files);
     const [message, setMessage] = useState('');
@@ -36,62 +36,121 @@ function MediaMessage({ files, setFiles, selectedChat }){
 
     function sendMessage(e) {
         e.preventDefault();
-        const formData = new FormData();
-          for(const file of files){
-            formData.append('media', file)
-          }
 
-          fetch(`/api/upload-images`, {
-            method: 'POST',
-            headers: {
-                'authorization': `Bearer ${accessToken}`
+        if (!socket || !selectedChat) return;
+        if (!message.trim() && files.length === 0) return;
+
+        // create optimistic message immediately
+        const optimisticId = Date.now();
+
+        const optimisticMessage = {
+            from: {
+                _id: user.id,
+                username: user.username,
+                firstName: user.firstName,
+                lastName: user.lastName,
             },
-            body: formData
-          }).then(response => {
-            if(!response.ok){
-                throw new Error('Request Failed!')
-            }
-              return response.json();
-          }).then(data => {
-              const media = data.media;
-              console.log(media)
-              const newMessage = {
-                  from: user.id,
-                  chatId: selectedChat._id,
-                  type: 'media',
-                  message: message.trim() ? message.trim() : ' ',
-                  media,
-              }
+            chatId: selectedChat._id,
+            type: "media",
+            isReply: isReply ? true : false,
+            repliedTo: (isReply && repliedTo) ? repliedTo : null,
+            reactions: [],
+            media: files.map(f => ({
+                url: URL.createObjectURL(f),
+                type: f.type.startsWith("image/")
+                    ? "image"
+                    : f.type.startsWith("video/")
+                        ? "video"
+                        : "audio",
+            })),
+            message: message.trim() ? message.trim() : " ",
+            _id: optimisticId,
+            pending: true,
+            timestamp: Date.now(),
+        };
 
-              fetch('/api/message', {
-                  method: 'POST',
-                  headers: {
-                      'Content-Type': 'application/json',
-                      'authorization': `Bearer ${accessToken}`,
-                  },
-                  body: JSON.stringify(newMessage),
-              }).then(res => {
-                  if (!res.ok) {
-                      throw new Error();
-                  }
-                  return res.json();
-              }).then(data => {
-                  if (data.message) {
-                    socket.emit("message", {message: data.message});
-                  }
-                  setMessage("");
-                  setIndex(0);
-                  setFiles([]);
-              }).catch(err => {
-                  console.error(err);
-                  navigate('/crash')
-              });
-          }).catch(err => {
-              console.error(err);
-              navigate('/crash')
-          });
+        setMessages(prev => [optimisticMessage, ...prev]);
+
+        // body you send to backend later
+        const newMessageBodyBase = {
+            optimisticId,
+            from: user.id,
+            chatId: selectedChat._id,
+            type: "media",
+            isReply: isReply ? true : false,
+            repliedTo: isReply ? repliedTo?._id : null,
+            reactions: [],
+            message: message.trim() ? message.trim() : " ",
+            media: [],
+        };
+
+        // clear UI inputs right away (like your text version)
+        setIsReply(false);
+        setRepliedTo(null);
+        setMessage("");
+        setIndex(0);
+        setFiles([]);
+
+        // 1) upload images
+        const formData = new FormData();
+        for (const file of files) {
+            formData.append("media", file);
+        }
+
+        fetch(`/api/upload-images`, {
+            method: "POST",
+            headers: {
+                authorization: `Bearer ${accessToken}`,
+            },
+            body: formData,
+        })
+            .then(response => {
+                if (!response.ok) throw new Error("Upload failed");
+                return response.json();
+            })
+            .then(data => {
+                const media = data.media;
+
+                // 2) create message with uploaded media URLs/ids
+                const newMessageBody = {
+                    ...newMessageBodyBase,
+                    media,
+                };
+
+                return fetch("/api/message", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        authorization: `Bearer ${accessToken}`,
+                    },
+                    body: JSON.stringify(newMessageBody),
+                });
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Message create failed");
+                return res.json();
+            })
+            .then(data => {
+                if (data.message) {
+                    // replace optimistic message with real one
+                    setMessages(prev =>
+                        prev.map(m =>
+                            String(m._id) === String(data.optimisticId)
+                                ? { ...data.message, _id: data.message._id }
+                                : m
+                        )
+                    );
+
+                    socket.emit("message", { message: data.message });
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                // optional: mark optimistic message as failed instead of hard-crash
+                // setMessages(prev => prev.map(m => String(m._id) === String(optimisticId) ? { ...m, pending: false, failed: true } : m));
+                navigate("/crash");
+            });
     }
-
 
     // ---------- Media Message = mmsg ---------- 
     return (

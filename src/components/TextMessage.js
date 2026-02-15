@@ -49,7 +49,7 @@ export default function TextMessage({ newSender, setIsReply, setRepliedTo, msg, 
                 </div>
             }
             <div className='msg-menu-btns-container'>
-                <div className={msg.from._id === user.id ? `my-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''} ${newSender ? 'right' : ''}  ${pop ? 'msg-pop' : ''}` : `other-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''} ${newSender ? 'left' : ''}  ${pop ? 'msg-pop' : ''}`}>
+                <div className={msg.from._id === user.id ? `my-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''} ${newSender ? 'right' : ''}  ${pop ? 'msg-pop' : ''}` : `other-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''} ${newSender ? 'left' : ''} ${pop ? 'msg-pop' : ''}`}>
                     {msg.from._id !== user.id && sender && newSender && (
                         <p className='sender-name' style={{ color: `${senderColors[senderIndex]}` }}>{sender.username}</p>
                     )}

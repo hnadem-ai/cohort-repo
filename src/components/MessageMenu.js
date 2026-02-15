@@ -46,7 +46,7 @@ function MessageMenu({ setIsReply, setRepliedTo, msg, setMessages }) {
 
   const handleCopy = async () => {
     try{
-      await navigator.clipboard.writeText(msg.text);
+      await navigator.clipboard.writeText(msg.message);
     }catch(err){
       console.error(err)
     }
@@ -94,7 +94,6 @@ function MessageMenu({ setIsReply, setRepliedTo, msg, setMessages }) {
             { msg.type === 'text' &&
               <button className="mm-inner-btn" onClick={handleCopy}><img className="mm-img" src={copyImg}/>Copy</button>
             }
-            <button className="mm-inner-btn"><img className="mm-img" src={reactImg}/>React</button>
             { msg.from._id === user.id &&
               <button className="mm-inner-btn" onClick={handleDelete}><img className="mm-img" src={delImg}/>Delete</button>
             }

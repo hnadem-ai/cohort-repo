@@ -85,7 +85,7 @@ function AudioPlayer({ src, isPost = false }) {
       <audio ref={audioRef} src={src} preload="metadata" />
       <button className="audio-btn" onClick={togglePlay}>
         <img
-          src={isPlaying ? (isPost ? pauseFontColorIcon : pauseIcon) : (isPost ? playFontColorIcon : playIcon)}
+          src={isPlaying ? pauseFontColorIcon  : playFontColorIcon }
           alt={isPlaying ? "Pause" : "Play"}
           className="audio-play-icon"
         />

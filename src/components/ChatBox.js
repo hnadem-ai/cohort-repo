@@ -1,6 +1,6 @@
 import './ChatBox.css';
 import { useState, useRef, useEffect } from 'react';
-import EmojiPicker from 'emoji-picker-react';
+import EmojiPicker, {EmojiStyle} from 'emoji-picker-react';
 import { useFloating, offset, autoUpdate, flip } from '@floating-ui/react';
 import { useAuth } from '../context/AuthContext';
 import ChatInfo from './ChatInfo';
@@ -395,196 +395,228 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
   }
 
   function sendMessage(e) {
-      e.preventDefault();
-      if(!message.trim()) return;
-      if (socket && selectedChat) {
-        if(files.length === 0){
-          const newMessageBody =  {
-            from: user.id,
+    e.preventDefault();
+    if (!message.trim()) return;
+    if (socket && selectedChat) {
+      if (files.length === 0) {
+
+        const optimisticId = Date.now();
+
+        const newMessageBody = {
+          optimisticId,
+          from: user.id,
+          chatId: selectedChat._id,
+          type: "text",
+          isReply: isReply ? true : false,
+          repliedTo: isReply ? repliedTo._id : null,
+          reactions: [],
+          media: [],
+          message: message.trim(),
+        }
+
+        setMessages(prev => [
+          {
+            from: {
+              _id: user.id,
+              username: user.username,
+              firstName: user.firstName,
+              lastName: user.lastName,
+            },
             chatId: selectedChat._id,
-            type: "text",
+            type: 'text',
             isReply: isReply ? true : false,
-            repliedTo: isReply ? repliedTo._id : null,
+            repliedTo: (isReply && repliedTo) ? repliedTo : null ,
+            reactions: [],
             media: [],
             message: message.trim(),
+            _id: optimisticId,
+            pending: true,
+            timestamp: Date.now(),
+          },
+          ...prev
+        ]);
+
+        fetch('/api/message', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'authorization': `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify(newMessageBody),
+        }).then(res => {
+          if (!res.ok) {
+            throw new Error();
           }
+          return res.json();
+        }).then(data => {
+          if (data.message) {
+            console.log(data.message)
+            setMessages(prev =>
+              prev.map(m =>
+                String(m._id) === String(data.optimisticId)
+                  ? { ...data.message}
+                  : m
+              )
+            );
 
-           fetch('/api/message', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'authorization': `Bearer ${accessToken}`,
-              },
-              body: JSON.stringify(newMessageBody),
-            }).then(res => {
-              if(!res.ok){
-                throw new Error();
-              }
-              return res.json();
-            }).then(data => {
-              if(data.message){
-                socket.emit("message", {message: data.message});    
-              }
-            }).catch(err => {
-              console.error(err);
-              navigate('/crash')
-            });
-          setIsReply(false);
-          setRepliedTo(null);
-          setMessage("");
-        }else {
-          const formData = new FormData();
-          for(const file of files){
-            formData.append('media', file)
+            socket.emit("message", { message: data.message });
           }
-
-          fetch(`/api/upload-images`, {
-            method: 'POST',
-            headers: {
-                'authorization': `Bearer ${accessToken}`
-            },
-            body: formData
-          }).then(response => {
-            if(!response.ok){
-                throw new Error('Request Failed!')
-            }
-            return response.json();
-          }).then(data => {
-            const media = data.media;
-            const newMessageBody = {
-              from: user.id,
-              chatId: selectedChat._id,
-              type: 'media',
-              message: ' ',
-              media,
-            }
-
-            fetch('/api/message', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'authorization': `Bearer ${accessToken}`,
-              },
-              body: JSON.stringify(newMessageBody),
-            }).then(res => {
-              if(!res.ok){
-                throw new Error();
-              }
-              return res.json();
-            }).then(data => {
-              if(data.message){
-                socket.emit("message", data.message);    
-              }
-            }).catch(err => {
-              console.error(err);
-              navigate('/crash')
-            })
-            socket.emit("typing", { chatId: selectedChat._id, userId: user.id, typing: false });
-            setFiles([])
-            setMessage("");
-          }).catch(err => {
-            console.error(err);
-            navigate('/crash')
-          })
-        }
+        }).catch(err => {
+          console.error(err);
+          navigate('/crash')
+        });
+        setIsReply(false);
+        setRepliedTo(null);
+        setMessage("");
       }
+    }
   }
 
- async function handleAudioMessage(e) {
-  e.preventDefault();
+  async function handleAudioMessage(e) {
+    e.preventDefault();
 
-  if (!recording) {
-    // start recording
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const recorder = new MediaRecorder(stream);
-    recorderRef.current = recorder;
-    chunksRef.current = [];
+    if (!recording) {
+      // start recording
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      recorderRef.current = recorder;
+      chunksRef.current = [];
 
-    recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) chunksRef.current.push(event.data);
-    };
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunksRef.current.push(event.data);
+      };
 
-    recorder.onstop = async () => {
-      // clear the auto-stop timer
+      recorder.onstop = async () => {
+        // clear the auto-stop timer
+        if (stopTimeoutRef.current) {
+          clearTimeout(stopTimeoutRef.current);
+          stopTimeoutRef.current = null;
+        }
+
+        recorder.stream.getTracks().forEach(track => track.stop());
+
+        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        if (blob.size > 30 * 1024 * 1024) return;
+
+        // ✅ optimistic render
+        const optimisticId = Date.now();
+        const localUrl = URL.createObjectURL(blob);
+
+        setMessages(prev => [
+          {
+            from: {
+              _id: user.id,
+              username: user.username,
+              firstName: user.firstName,
+              lastName: user.lastName,
+            },
+            chatId: selectedChat._id,
+            type: "audio",
+            isReply: false,
+            repliedTo: null,
+            reactions: [],
+            message: " ",
+            media: [{ url: localUrl, type: "audio" }], // matches schema
+            _id: optimisticId,
+            pending: true,
+            timestamp: Date.now(),
+          },
+          ...prev
+        ]);
+
+        const formData = new FormData();
+        formData.append("audio", blob, "audio.webm");
+
+        try {
+          const upRes = await fetch(`/api/upload-audio`, {
+            method: "POST",
+            headers: { authorization: `Bearer ${accessToken}` },
+            body: formData,
+          });
+
+          if (!upRes.ok) throw new Error("Upload failed");
+          const data = await upRes.json();
+
+          const media = data.media; // should be [{ url, type: 'audio' }] (or compatible)
+
+          const newMessageBody = {
+            optimisticId,
+            from: user.id,
+            chatId: selectedChat._id,
+            type: "audio",
+            message: " ",
+            media,
+          };
+
+          const msgRes = await fetch("/api/message", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify(newMessageBody),
+          });
+
+          if (!msgRes.ok) throw new Error("Message send failed");
+          const msgData = await msgRes.json();
+
+          if (msgData.message) {
+            // replace optimistic with real
+            setMessages(prev =>
+              prev.map(m =>
+                String(m._id) === String(msgData.message.optimisticId)
+                  ? { ...msgData.message, _id: msgData.message._id }
+                  : m
+              )
+            );
+
+            // cleanup local blob URL (avoid memory leak)
+            URL.revokeObjectURL(localUrl);
+
+            socket.emit("message", { message: msgData.message });
+          }
+
+          socket.emit("typing", {
+            chatId: selectedChat._id,
+            userId: user.id,
+            typing: false
+          });
+
+          setFiles([]);
+          setMessage("");
+        } catch (err) {
+          console.error(err);
+
+          // optional: mark optimistic as failed instead of crashing
+          // setMessages(prev =>
+          //   prev.map(m => String(m._id) === String(optimisticId) ? { ...m, pending: false, failed: true } : m)
+          // );
+
+          navigate("/crash");
+        }
+      };
+
+      recorder.start();
+      setRecording(true);
+
+      // ✅ auto-stop at 10 minutes
+      stopTimeoutRef.current = setTimeout(() => {
+        if (recorderRef.current && recorderRef.current.state === "recording") {
+          recorderRef.current.stop();
+          setRecording(false);
+        }
+      }, MAX_AUDIO_MS);
+
+    } else {
+      // stop recording manually
       if (stopTimeoutRef.current) {
         clearTimeout(stopTimeoutRef.current);
         stopTimeoutRef.current = null;
       }
-
-      recorder.stream.getTracks().forEach(track => track.stop());
-
-      const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-
-      if (blob.size > 30 * 1024 * 1024) return;
-
-      const formData = new FormData();
-      formData.append("audio", blob, "audio.webm");
-
-      try {
-        const upRes = await fetch(`/api/upload-audio`, {
-          method: "POST",
-          headers: { authorization: `Bearer ${accessToken}` },
-          body: formData,
-        });
-
-        if (!upRes.ok) throw new Error("Upload failed");
-        const data = await upRes.json();
-
-        const media = data.media;
-
-        const newMessageBody = {
-          from: user.id,
-          chatId: selectedChat._id,
-          type: "audio",
-          message: " ",
-          media,
-        };
-
-        const msgRes = await fetch("/api/message", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify(newMessageBody),
-        });
-
-        if (!msgRes.ok) throw new Error("Message send failed");
-        const msgData = await msgRes.json();
-
-        if (msgData.message) socket.emit("message", msgData.message);
-
-        socket.emit("typing", { chatId: selectedChat._id, userId: user.id, typing: false });
-        setFiles([]);
-        setMessage("");
-      } catch (err) {
-        console.error(err);
-        navigate("/crash");
-      }
-    };
-
-    recorder.start();
-    setRecording(true);
-
-    // ✅ auto-stop at 10 minutes
-    stopTimeoutRef.current = setTimeout(() => {
-      if (recorderRef.current && recorderRef.current.state === "recording") {
-        recorderRef.current.stop();
-        setRecording(false);
-        // optionally show toast: "Max 10 minutes reached"
-      }
-    }, MAX_AUDIO_MS);
-
-  } else {
-    // stop recording manually
-    if (stopTimeoutRef.current) {
-      clearTimeout(stopTimeoutRef.current);
-      stopTimeoutRef.current = null;
+      recorderRef.current.stop();
+      setRecording(false);
     }
-    recorderRef.current.stop();
-    setRecording(false);
   }
-}
 
   function onEmojiClick(emojiData) {
     const emoji = emojiData.emoji;
@@ -614,7 +646,7 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
 
   return (
     <div className="chat-box">
-      { files.length > 0 && <MediaMessagePreview files={files} setFiles={setFiles} selectedChat={selectedChat}/> }
+      { files.length > 0 && <MediaMessagePreview files={files} setFiles={setFiles} selectedChat={selectedChat} setMessages={setMessages} isReply={isReply} repliedTo={repliedTo} setIsReply={setIsReply} setRepliedTo={setRepliedTo}/> }
       {clickedMedia && clickedMsg && <MediaView msg={clickedMsg} media={clickedMedia} setClickedMedia={setClickedMedia}/>}
       { selectedChat && <ChatInfo setChats={setChats}selectedChat={selectedChat} setSelectedChat={setSelectedChat} chatInfoClass={chatInfoClass} setChatInfoClass={setChatInfoClass} setMessages={setMessages}/> }
       { selectedChat &&
@@ -712,14 +744,14 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
                 refs.setFloating(el);
                 emojiPickerRef.current = el;
               }} style={floatingStyles}>
-                <EmojiPicker onEmojiClick={onEmojiClick} theme='dark' defaultSkinTone='white'/>
+                <EmojiPicker onEmojiClick={onEmojiClick} emojiStyle={EmojiStyle.TWITTER} theme='dark' defaultSkinTone='white'/>
               </div>
             )}
 
             { recording ? (
               <div className='recording-indicator'>
-                <img src={recordingIcon} className='recoding-img'/>
-                Recording......
+                <img src={recordingIcon} className='recording-img'/>
+                <p>Recording......</p>
               </div>
             ) : (
               <input

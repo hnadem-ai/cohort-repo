@@ -2,7 +2,7 @@
     position: relative;
     display: flex;
     align-items: center;
-    z-index: 0;
+    z-index: 1;
     transition: 5ms;
     height: fit-content;
 }

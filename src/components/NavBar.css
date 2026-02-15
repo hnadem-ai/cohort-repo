@@ -16,9 +16,12 @@
     z-index: 1;
 }
 
-/* Expanded state */
+.open{
+    width: 300px;
+}
+
 .nav-container.open {
-    width: 270px; /* expanded width like YouTube */
+    width: 270px;
     align-items: flex-start;
     padding-left: 10px;
 }
@@ -77,8 +80,14 @@
 /* Labels */
 .nav-btn span {
     color: white;
-    font-size: 0.8rem;
+    font-size: 0.7rem;
     white-space: nowrap;
+}
+
+.notification-img-container{
+    height: fit-content;
+    width: fit-content;
+    position: relative;
 }
 
 /* Hide labels when collapsed */

@@ -1,0 +1,22 @@
+.msg-pop {
+  animation: msgPop 290ms cubic-bezier(.2,.9,.2,1);
+  transform-origin: bottom left;
+}
+
+.my-media-msg.msg-pop{
+  transform-origin: bottom right;
+}
+
+@keyframes msgPop {
+  0% {
+    transform: scale(0.98);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.02);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}

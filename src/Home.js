@@ -20,12 +20,17 @@ function Home() {
   const [selectedChat, setSelectedChat] = useState(null);
   const { user, accessToken, loading } = useAuth();
   const [showLiveChat, setShowLiveChat] = useState(true);
+  const [userChats, setUserChats] = useState([]);
+  const [isNewMessage, setIsNewMessage] = useState(false);
+  const [newMessageChatIds, setNewMessageChatIds] = useState([]);
 
   const { markMessagesRead, chatOpened } = useSocket();
 
-  // useEffect(() => {
-  //   navigate('/welcome')
-  // })
+  useEffect(() => {
+    if(!accessToken && !loading){
+      navigate('/login');
+    }
+  },[accessToken]);
 
   useEffect(() => {
     if (!accessToken || !paramChatId || loading) return;
@@ -85,6 +90,24 @@ function Home() {
       });
   }, [accessToken, loading]);
 
+   useEffect(() => {
+    if (!accessToken || loading) return;
+    
+    fetch(`/api/user-chats/${encodeURIComponent(user.id)}`, {
+      method: 'GET',
+      headers: { 'authorization': `Bearer ${accessToken}` }
+    })
+      .then(r => { if (!r.ok) throw new Error('Request failed: ' + r.status); return r.json(); })
+      .then(data => {
+        console.log(data.chats)
+        setUserChats(data.chats || []);
+      })
+      .catch(err => {
+        console.error(err);
+        navigate('/crash');
+      });
+  }, [accessToken, loading]);
+
   const updateReactions = (existing = [], data) => {
     const filtered = existing.filter(r => String(r.userId) !== String(data.userId));
     return [...filtered, { userId: data.userId, emoji: data.emoji }];
@@ -126,6 +149,13 @@ function Home() {
   })
 
   useSocketEvent("message", (msg) => {
+    console.log('hello from messages')
+    if(msg.from._id === user.id) return;
+    if(userChats.some(uChat => String(msg.chatId) === String(uChat._id))){
+      console.log('true hogyay bhabhasbasdasdfasdfasdfasdfasdfasdfasdfasdfdhabsd');
+      setNewMessageChatIds(prev => [...prev, msg.chatId]);
+      setIsNewMessage(true)
+    }
     const isForSelected = selectedChat && String(msg.chatId) === String(selectedChat._id);
 
     if (isForSelected) {
@@ -206,7 +236,7 @@ function Home() {
   }, [selectedChat?._id]);
 
   useSocketEvent("typing", (data) => {
-    if (!selectedChat || String(data.chatId) !== String(selectedChat._id)) return;
+    if (!selectedChat || String(data.chatId) !== String(selectedChat._id) || String(data.userId) === String(user.id)) return;
 
     if (data.typing) {
       setTypingUsers(prev => {
@@ -236,7 +266,7 @@ function Home() {
     <div className="home">
       <title>Home | CohortBox</title>
       <NavBar selectedChat={selectedChat}/>
-      <HomeNav users={users} setUsers={setUsers} chats={chats} setChats={setChats} selectedChat={selectedChat} setSelectedChat={setSelectedChat} />
+      <HomeNav newMessageChatIds={newMessageChatIds} setNewMessageChatIds={setNewMessageChatIds} isNewMessage={isNewMessage} setIsNewMessage={setIsNewMessage} users={users} setUsers={setUsers} chats={chats} setChats={setChats} selectedChat={selectedChat} setSelectedChat={setSelectedChat} userChats={userChats} setUserChats={setUserChats} />
       {selectedChat ? (
         <div className='chat-box-live-chat-container'>
           <ChatBox

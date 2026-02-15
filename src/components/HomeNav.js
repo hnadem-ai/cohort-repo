@@ -9,7 +9,7 @@ import { useSocketEvent } from '../context/SocketContext';
 import close from '../images/close-gray.png'
 import Toast from './Toast';
 
-function ChatsNav({ users, setUsers, chats, setChats, selectedChat, setSelectedChat }) {
+function ChatsNav({ users, setUsers, chats, setChats, selectedChat, setSelectedChat, userChats, setUserChats, isNewMessage, setIsNewMessage, setNewMessageChatIds, newMessageChatIds }) {
   const { user, accessToken, loading } = useAuth();
   const [friends, setFriends] = useState([]);
   const [friendRequests, setFriendRequests] = useState([]);
@@ -25,11 +25,26 @@ function ChatsNav({ users, setUsers, chats, setChats, selectedChat, setSelectedC
   const [chatLoading, setChatLoading] = useState(false);
   const [hasMoreUsers, setHasMoreUsers] = useState(true);
   const [userLoading, setUserLoading] = useState(false);
+
+  // sub pagination
+  const [subscribedChats, setSubscribedChats] = useState([]);
+  const [hasMoreSubs, setHasMoreSubs] = useState(true);
+  const [subLoading, setSubLoading] = useState(false);
+
+  // my pagination
+  const [hasMoreMy, setHasMoreMy] = useState(true);
+  const [myLoading, setMyLoading] = useState(false);
+
   const navigate = useNavigate();
-  
+
   const chatsContainerRef = useRef(null);
   const loadMoreChatsRef = useRef(null);
   const loadMoreUsersRef = useRef(null);
+  const loadMoreSubsRef = useRef(null);
+  const loadMoreMyRef = useRef(null);
+  const subInFlightRef = useRef(false);
+  const myInFlightRef = useRef(false);
+  const LIMIT = 30;
 
   const fetchMoreChats = useCallback(async () => {
     if (!accessToken || loading) return;
@@ -145,18 +160,123 @@ function ChatsNav({ users, setUsers, chats, setChats, selectedChat, setSelectedC
     users,
     setUsers
   ]);
-  
+
+  const fetchMoreSubscribedChats = useCallback(async () => {
+    if (!accessToken || loading) return;
+    if (searchState || currFilter !== 'sub') return;
+
+    // ✅ blocks double-fire before state updates
+    if (subInFlightRef.current || subLoading || !hasMoreSubs) return;
+
+    subInFlightRef.current = true;
+    setSubLoading(true);
+
+    const lastId = subscribedChats.length
+      ? subscribedChats[subscribedChats.length - 1]._id
+      : null;
+
+    try {
+      const url = lastId
+        ? `/api/subscribed-chats?lastId=${encodeURIComponent(lastId)}`
+        : `/api/subscribed-chats`;
+
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: { authorization: `Bearer ${accessToken}` },
+        credentials: 'include'
+      });
+
+      if (res.status === 404) {
+        setHasMoreSubs(false);
+        return;
+      }
+      if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+
+      const data = await res.json();
+      const newChats = data?.chats || [];
+
+      // ✅ IMPORTANT: if server returns less than LIMIT, stop pagination
+      if (newChats.length < LIMIT) setHasMoreSubs(false);
+
+      const existing = new Set(subscribedChats.map(c => String(c._id)));
+      const deduped = newChats.filter(c => !existing.has(String(c._id)));
+
+      if (deduped.length > 0) {
+        setSubscribedChats(prev => [...prev, ...deduped]);
+      } else if (newChats.length === 0) {
+        setHasMoreSubs(false);
+      }
+    } catch (err) {
+      console.error(err.message || 'Failed to load subscribed chats');
+      navigate('/crash');
+    } finally {
+      setSubLoading(false);
+      subInFlightRef.current = false;
+    }
+  }, [accessToken, loading, searchState, currFilter, subLoading, hasMoreSubs, subscribedChats, navigate]);
+
+  const fetchMoreMyChats = useCallback(async () => {
+    if (!accessToken || loading) return;
+    if (!user?.id) return;
+    if (searchState || currFilter !== 'my') return;
+
+    if (myInFlightRef.current || myLoading || !hasMoreMy) return;
+
+    myInFlightRef.current = true;
+    setMyLoading(true);
+
+    const lastId = userChats.length ? userChats[userChats.length - 1]._id : null;
+
+    try {
+      const url = lastId
+        ? `/api/user-chats/${encodeURIComponent(user.id)}?lastId=${encodeURIComponent(lastId)}`
+        : `/api/user-chats/${encodeURIComponent(user.id)}`;
+
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: { authorization: `Bearer ${accessToken}` },
+        credentials: 'include'
+      });
+
+      if (res.status === 404) {
+        setHasMoreMy(false);
+        return;
+      }
+      if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+
+      const data = await res.json();
+      const newChats = data?.chats || [];
+
+      if (newChats.length < LIMIT) setHasMoreMy(false);
+
+      const existing = new Set(userChats.map(c => String(c._id)));
+      const deduped = newChats.filter(c => !existing.has(String(c._id)));
+
+      if (deduped.length > 0) {
+        setUserChats(prev => [...prev, ...deduped]);
+      } else if (newChats.length === 0) {
+        setHasMoreMy(false);
+      }
+    } catch (err) {
+      console.error(err.message || 'Failed to load my chats');
+      navigate('/crash');
+    } finally {
+      setMyLoading(false);
+      myInFlightRef.current = false;
+    }
+  }, [accessToken, loading, user?.id, searchState, currFilter, myLoading, hasMoreMy, userChats, navigate]);
+
   function showAlert(msg) {
     setToastMsg(msg);
     setShowToast(true);
   }
-  
 
-  async function handleSearch(e){
-    try{
+
+  async function handleSearch(e) {
+    try {
       e.preventDefault();
-      if(searchInput.trim() === '') return;
-      if(searchInput.length < 2) {
+      if (searchInput.trim() === '') return;
+      if (searchInput.length < 2) {
         showAlert('Please Search with more than 2 letters');
         return;
       }
@@ -168,11 +288,11 @@ function ChatsNav({ users, setUsers, chats, setChats, selectedChat, setSelectedC
         }
       })
 
-      if(!result.ok){
+      if (!result.ok) {
         showAlert('Search was Unsuccessful!');
         return;
       }
-      const {chats, users} = await result.json();
+      const { chats, users } = await result.json();
       setSearchQuery(searchInput);
       setSearchChats(chats);
       setSearchUsers(users);
@@ -183,16 +303,31 @@ function ChatsNav({ users, setUsers, chats, setChats, selectedChat, setSelectedC
     }
   }
 
+
   useEffect(() => {
     if (!accessToken || loading) return;
+    if (currFilter !== 'cb') return;
     if (!chats || chats.length === 0) fetchMoreChats();
   }, [accessToken, loading]);
 
   useEffect(() => {
     if (!accessToken || loading) return;
-    if(!currFilter === ' people') return;
+    if (currFilter !== ' people') return;
     if (!users || users.length === 0) fetchMoreUsers();
   }, [accessToken, loading, currFilter]);
+
+  useEffect(() => {
+    if (!accessToken || loading) return;
+    if (currFilter !== 'sub') return;
+    if (!subscribedChats || subscribedChats.length === 0) fetchMoreSubscribedChats();
+  }, [accessToken, loading, currFilter, subscribedChats?.length]);
+
+  useEffect(() => {
+    if (!accessToken || loading) return;
+    if (currFilter !== 'my') return;
+    if (!userChats || userChats.length === 0) fetchMoreMyChats();
+  }, [accessToken, loading, currFilter, userChats?.length]);
+
 
   useEffect(() => {
     if (!loadMoreChatsRef.current) return;
@@ -216,7 +351,7 @@ function ChatsNav({ users, setUsers, chats, setChats, selectedChat, setSelectedC
 
   useEffect(() => {
     if (!loadMoreUsersRef.current) return;
-    if(searchState || !currFilter === 'people') return
+    if (searchState || currFilter !== 'people') return
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -234,6 +369,34 @@ function ChatsNav({ users, setUsers, chats, setChats, selectedChat, setSelectedC
     observer.observe(loadMoreUsersRef.current);
     return () => observer.disconnect();
   }, [fetchMoreUsers]);
+
+  useEffect(() => {
+    if (!loadMoreSubsRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) fetchMoreSubscribedChats();
+      },
+      { root: chatsContainerRef.current, rootMargin: "200px", threshold: 0 }
+    );
+
+    observer.observe(loadMoreSubsRef.current);
+    return () => observer.disconnect();
+  }, [fetchMoreSubscribedChats]);
+
+  useEffect(() => {
+    if (!loadMoreMyRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) fetchMoreMyChats();
+      },
+      { root: chatsContainerRef.current, rootMargin: "200px", threshold: 0 }
+    );
+
+    observer.observe(loadMoreMyRef.current);
+    return () => observer.disconnect();
+  }, [fetchMoreMyChats]);
 
 
   useEffect(() => {
@@ -329,7 +492,7 @@ function ChatsNav({ users, setUsers, chats, setChats, selectedChat, setSelectedC
     'unfriend',
     (userId) => {
       setFriends(prev =>
-        prev.filter(friend => !(String(friend._id) === String(userId) ))
+        prev.filter(friend => !(String(friend._id) === String(userId)))
       );
     },
     [user]
@@ -369,15 +532,17 @@ function ChatsNav({ users, setUsers, chats, setChats, selectedChat, setSelectedC
 
       <div className='cn-body-container'>
         <div className='cn-searchbar-container'>
-          <img className='cn-search-icon' src={searchIcon}/>
+          <img className='cn-search-icon' src={searchIcon} />
           <form className='form' onSubmit={handleSearch}>
-            <input className='cn-search-input'  placeholder='Search Cohortian/CohortBox' value={searchInput} onInput={(e) => setSearchInput(e.target.value)}/>
+            <input className='cn-search-input' placeholder='Search Cohortian/CohortBox' value={searchInput} onInput={(e) => setSearchInput(e.target.value)} />
           </form>
         </div>
 
         <div className='cn-filter-container'>
-          <button className={'cn-filter-btn' + (currFilter === 'cb' ? ' active-filter-btn' : '')} onClick={() => setCurrFilter('cb')}>Cohort Boxes</button>
-          <button className={'cn-filter-btn' + (currFilter === 'people' ? ' active-filter-btn' : '')} onClick={(e) => {e.preventDefault(); setCurrFilter('people')}}>People</button>
+          <button className={'cn-filter-btn' + (currFilter === 'cb' ? ' active-filter-btn' : '')} onClick={() => setCurrFilter('cb')}>Cohortboxes</button>
+          <button className={'cn-filter-btn' + (currFilter === 'people' ? ' active-filter-btn' : '')} onClick={(e) => { e.preventDefault(); setCurrFilter('people') }}>People</button>
+          <button className={'cn-filter-btn' + (currFilter === 'sub' ? ' active-filter-btn' : '')} onClick={(e) => { e.preventDefault(); setCurrFilter('sub') }}>Subscriptions</button>
+          <button className={'cn-filter-btn' + (currFilter === 'my' ? ' active-filter-btn' : '')} onClick={(e) => { e.preventDefault(); setCurrFilter('my'); setIsNewMessage(false) }}>My Cohortboxes { isNewMessage && <div className='new-indicator'></div>}</button>
         </div>
 
         <div className='cn-chats-container' ref={chatsContainerRef}>
@@ -385,25 +550,38 @@ function ChatsNav({ users, setUsers, chats, setChats, selectedChat, setSelectedC
             searchState && (
               <div className='search-heading'>
                 <p>{`search '${searchQuery}'`}</p>
-                <img src={close} onClick={() => setSearchState(false)}/>
+                <img src={close} onClick={() => setSearchState(false)} />
               </div>
             )
           }
           {
-            searchState ? 
-              currFilter === 'cb'
-              ? 
-               searchChats.map(chat => (
-                <NavChatButton key={chat._id || chat.id} chat={chat} selectedChat={selectedChat} setSelectedChat={setSelectedChat} />
+            /* ================= SEARCH MODE ================= */
+            searchState && currFilter === 'cb' && (
+              searchChats.map(chat => (
+                <NavChatButton
+                  key={chat._id || chat.id}
+                  chat={chat}
+                  selectedChat={selectedChat}
+                  setSelectedChat={setSelectedChat}
+                />
               ))
-              : searchUsers.map(u => {
+            )
+          }
+
+          {
+            searchState && currFilter !== 'cb' && (
+              searchUsers.map(u => {
                 const id = String(u._id);
                 const isFriend = friendIds.has(id);
                 const sentRequest = outgoingPending.has(id);
                 const gotRequest = incomingPending.has(id);
 
                 return (
-                  <Link to={'/profile/' + u._id} style={{ textDecoration: 'none' }} key={u._id}>
+                  <Link
+                    to={'/profile/' + u._id}
+                    style={{ textDecoration: 'none' }}
+                    key={u._id}
+                  >
                     <NavUserButton
                       user={u}
                       isFriend={isFriend}
@@ -413,46 +591,129 @@ function ChatsNav({ users, setUsers, chats, setChats, selectedChat, setSelectedC
                   </Link>
                 );
               })
-             :
-              currFilter === 'cb'
-                ? (
-                  <>
-                    {chats.map(chat => (
-                      <NavChatButton key={chat._id || chat.id} chat={chat} selectedChat={selectedChat} setSelectedChat={setSelectedChat} />
-                    ))}
-                    {chatLoading && <p style={{ padding: '8px', opacity: 0.8, color: '#c5cad3' }}>Loading more...</p>}
-                    {!chatLoading && !hasMoreChats && chats.length > 0 && (
-                      <p style={{ padding: '8px', opacity: 0.6 }}>No more chats</p>
-                    )}
-                    <div ref={loadMoreChatsRef} style={{ height: 1 }} />
-                  </>
-                ) : (
-                  <>
-                    {users.map(u => {
-                      const id = String(u._id);
-                      const isFriend = friendIds.has(id);
-                      const sentRequest = outgoingPending.has(id);
-                      const gotRequest = incomingPending.has(id);
-
-                      return (
-                        <Link to={'/profile/' + u._id} style={{ textDecoration: 'none' }} key={u._id}>
-                          <NavUserButton
-                            user={u}
-                            isFriend={isFriend}
-                            sentRequest={sentRequest}
-                            gotRequest={gotRequest}
-                          />
-                        </Link>
-                      );
-                    })}
-                    {userLoading && <p style={{ padding: '8px', opacity: 0.8, color: '#c5cad3' }}>Loading more...</p>}
-                    {!userLoading && !hasMoreUsers && users.length > 0 && (
-                      <p style={{ padding: '8px', opacity: 0.6 }}>No more users</p>
-                    )}
-                    <div ref={loadMoreUsersRef} style={{ height: 1 }} />
-                  </>
-                )
+            )
           }
+
+          {
+            /* ================= NORMAL MODE ================= */
+            !searchState && currFilter === 'cb' && (
+              <>
+                {chats.map(chat => (
+                  <NavChatButton
+                    key={chat._id || chat.id}
+                    chat={chat}
+                    selectedChat={selectedChat}
+                    setSelectedChat={setSelectedChat}
+                  />
+                ))}
+
+                {chatLoading && (
+                  <p style={{ padding: '8px', opacity: 0.8, color: '#c5cad3' }}>
+                    Loading more...
+                  </p>
+                )}
+
+                {!chatLoading && !hasMoreChats && chats.length > 0 && (
+                  <p style={{ padding: '8px', opacity: 0.6 }}>
+                    No more chats
+                  </p>
+                )}
+
+                <div ref={loadMoreChatsRef} style={{ height: 1 }} />
+              </>
+            )
+          }
+
+          {
+            !searchState && currFilter === 'people' && (
+              <>
+                {users.map(u => {
+                  const id = String(u._id);
+                  const isFriend = friendIds.has(id);
+                  const sentRequest = outgoingPending.has(id);
+                  const gotRequest = incomingPending.has(id);
+
+                  return (
+                    <Link
+                      to={'/profile/' + u._id}
+                      style={{ textDecoration: 'none' }}
+                      key={u._id}
+                    >
+                      <NavUserButton
+                        user={u}
+                        isFriend={isFriend}
+                        sentRequest={sentRequest}
+                        gotRequest={gotRequest}
+                      />
+                    </Link>
+                  );
+                })}
+
+                {userLoading && (
+                  <p style={{ padding: '8px', opacity: 0.8, color: '#c5cad3' }}>
+                    Loading more...
+                  </p>
+                )}
+
+                {!userLoading && !hasMoreUsers && users.length > 0 && (
+                  <p style={{ padding: '8px', opacity: 0.6 }}>
+                    No more users
+                  </p>
+                )}
+
+                <div ref={loadMoreUsersRef} style={{ height: 1 }} />
+              </>
+            )
+          }
+
+          {
+            !searchState && currFilter === 'sub' && (
+              <>
+                {subscribedChats.map(chat => (
+                  <NavChatButton
+                    key={chat._id || chat.id}
+                    chat={chat}
+                    selectedChat={selectedChat}
+                    setSelectedChat={setSelectedChat}
+                  />
+                ))}
+
+                {subLoading && (
+                  <p style={{ padding: '8px', opacity: 0.8, color: '#c5cad3' }}>
+                    Loading more...
+                  </p>
+                )}
+
+                <div ref={loadMoreSubsRef} style={{ height: 1 }} />
+              </>
+            )
+          }
+
+          {
+            !searchState && currFilter === 'my' && (
+              <>
+                {userChats.map(chat => (
+                  <NavChatButton
+                    key={chat._id || chat.id}
+                    chat={chat}
+                    selectedChat={selectedChat}
+                    setSelectedChat={setSelectedChat}
+                    setNewMessageChatIds={setNewMessageChatIds}
+                    newMessageChatIds={newMessageChatIds}
+                  />
+                ))}
+
+                {myLoading && (
+                  <p style={{ padding: '8px', opacity: 0.8, color: '#c5cad3' }}>
+                    Loading more...
+                  </p>
+                )}
+
+                <div ref={loadMoreMyRef} style={{ height: 1 }} />
+              </>
+            )
+          }
+
         </div>
       </div>
       <Toast

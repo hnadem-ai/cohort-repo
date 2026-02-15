@@ -33,7 +33,7 @@
     padding: 20px 10px 0 10px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 14px;
     overflow: hidden;
 }
 
@@ -76,7 +76,10 @@
 
 .cn-filter-container{
     display: flex;
-    gap: 10px;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--small) var(--black);
 }
 
 .cn-filter-btn{
@@ -86,7 +89,9 @@
     color: var(--fontColor);
     height: 30px;
     border-radius: 30px;
-    padding: 0 10px;
+    padding: 0 7px;
+    min-width: fit-content;
+    position: relative;
 }
 
 .active-filter-btn{
