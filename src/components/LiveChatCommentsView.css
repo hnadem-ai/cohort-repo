@@ -11,6 +11,7 @@
     box-sizing: border-box;
     flex: 1 1 auto;
     overflow: hidden;
+    position: relative;
 }
 
 .live-chat-header{
@@ -49,7 +50,7 @@
     width: 100%;
     display: flex;
     flex-direction: column;
-    justify-content: flex-start;
+    justify-content: flex-end;
     padding: 8px 0;
     overflow-y: auto;
     gap: 8px;
@@ -64,14 +65,14 @@
     margin-right: 2rem;
 }
 
-.live-chat-comments-container .pinned-comment-container {
+.live-chat-container .pinned-comment-container {
     left: 0;
     position: absolute;
-    top: 0;
+    top: 69px;
     z-index: 2;
-    width: 95%;
+    width: 92%;
     margin: 10px;
-    height: 38px;
+    height: auto;
     border: 1px solid var(--borderColor);
     display: flex;
     align-items: center;
@@ -80,6 +81,7 @@
     border-radius: 4px;
     box-shadow: 5px 0px 15px var(--borderColor);
     background-color: var(--black);
+    color: var(--fontColor);
 }
 
 .live-chat-comments-container > p {
@@ -88,12 +90,8 @@
 
 .live-chat-comments-container .comment {
     display: flex;
-    align-items: flex-start;
-    gap: 5px;
-}
-
-.live-chat-comments-container .comment p {
-    white-space: nowrap;
+    align-items: center;
+    gap: 2px;
 }
 
 .live-chat-comments-container .comment:hover .lm-container .lm-btn{
@@ -131,7 +129,7 @@
     height: 40px;
     width: 40px;
     border-radius: 25px;
-    background-color: var(--chatBoxBg);
+    background-color: var(--borderColor);
     display: grid;
     place-items: center;
     color: var(--fontColor);

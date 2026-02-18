@@ -153,8 +153,10 @@ function Home() {
     if(msg.from._id === user.id) return;
     if(userChats.some(uChat => String(msg.chatId) === String(uChat._id))){
       console.log('true hogyay bhabhasbasdasdfasdfasdfasdfasdfasdfasdfasdfdhabsd');
-      setNewMessageChatIds(prev => [...prev, msg.chatId]);
-      setIsNewMessage(true)
+      if(String(msg.chatId) !== String(selectedChat._id) ) {
+        setNewMessageChatIds(prev => [...prev, msg.chatId]);
+        setIsNewMessage(true);
+      }
     }
     const isForSelected = selectedChat && String(msg.chatId) === String(selectedChat._id);
 
@@ -219,12 +221,12 @@ function Home() {
     );
   }, [selectedChat?._id]);
 
-  useSocketEvent("reaction", ({ emoji, msgId, userId }) => {
+  useSocketEvent("reaction", ({ emoji, msgId, userId, username }) => {
     console.log('reaction')
     setMessages(prev =>
       prev.map(msg =>
         String(msg._id) === String(msgId)
-          ? { ...msg, reactions: updateReactions(msg.reactions, { emoji, msgId, userId }) }
+          ? { ...msg, reactions: updateReactions(msg.reactions, { emoji, msgId, userId: {_id: userId, username} }) }
           : msg
       )
     );
@@ -259,8 +261,18 @@ function Home() {
       )
     );
 
+    setNewMessageChatIds(prev => {
+      const next = prev.filter(c => String(c) !== String(selectedChat._id));
+      setIsNewMessage(next.length > 0);
+      return next;
+    });
+
     chatOpened(selectedChat._id);
   }, [selectedChat, chatOpened]);
+
+  if (loading) return null;
+
+  if (!accessToken) return null;
 
   return (
     <div className="home">

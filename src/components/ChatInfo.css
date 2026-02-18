@@ -122,7 +122,7 @@
 .participant-names-container{
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 5px;
     padding: 0 5px;
     flex: 1;
     overflow-y: auto;
@@ -133,6 +133,13 @@
 .chat-info-participant-container{
     display: flex;
     justify-content: space-between;
+    border-radius: 4px;
+    transition: 0.3s all ease;
+    padding: 8px 5px;
+}
+
+.chat-info-participant-container:hover{
+    background-color: var(--hover);
 }
 
 .chat-info-participant-dp-container{

@@ -265,12 +265,15 @@ app.post('/api/signup', async (req, res) => {
         const userDB = await User.create(user);
 
         const transporter = nodemailer.createTransport({
-            service: 'gmail',
+            host: process.env.EMAIL_HOST,   // confirm in your dashboard
+            port: process.env.EMAIL_PORT,
+            secure: process.env.EMAIL_SECURE,              // TLS
             auth: {
                 user: process.env.EMAIL_USER,
                 pass: process.env.EMAIL_PASS
-            }
-        })
+            },
+            requireTLS: true
+        });
 
         const mailOptions = {
             from: '"Cohort-Box" <no-reply@cohortbox.com>',
@@ -1204,7 +1207,7 @@ app.get('/api/user/:userId', async (req, res) => {
 
     // 2. Fetch user with controlled fields only
     const userDB = await User.findById(userId)
-      .select('_id firstName lastName username dp friends')
+      .select('_id firstName lastName username dp friends about')
       .populate('friends', '_id firstName lastName username dp')
       .lean();
 
@@ -1224,6 +1227,23 @@ app.get('/api/user/:userId', async (req, res) => {
     res.status(500).json({ message: 'Internal Server Error' });
   }
 });
+
+app.get('/api/user-dp', authTokenAPI, async (req, res) => {
+    try{
+        const userId = req.user.id;
+        if(!mongoose.isValidObjectId(userId)){
+            return res.status(400).json({message: 'Invalid User ID!'});
+        }
+        const user = await User.findById(userId).select('dp');
+        if(!user){
+            return res.status(404).json({message: 'No User Found!'});
+        }
+        return res.status(200).json({dp: user.dp});
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({message: 'Internal Server Error!'})
+    }
+})
 
 app.get('/api/friends', authTokenAPI, async (req, res) => {
   try {
@@ -1455,7 +1475,8 @@ app.get('/api/chats/:id', authTokenAPI, async (req, res) => {
         }
 
         const chat = await Chat.findById(id)
-            .populate('participants', '_id firstName lastName')
+            .populate('participants', '_id firstName lastName username dp')
+            .populate('liveComments.from', '_id username')
             .lean();
 
         if (!chat) {
@@ -1547,7 +1568,8 @@ app.get('/api/messages/:chatId', authTokenAPI, async (req, res) => {
         let query = Message.find(filter)
             .sort({ _id: -1 }) // newest first
             .limit(limit)
-            .populate('from', '_id firstName lastName username dp') // always populate sender
+            .populate('from', '_id firstName lastName username dp')
+            .populate('reactions.userId', '_id username')
             .lean();
 
         // Optionally populate repliedTo if isReply is true
@@ -2828,6 +2850,12 @@ app.post('/api/reaction', authTokenAPI, async (req, res) => {
         }
 
         const userObjectId = new mongoose.Types.ObjectId(userId);
+
+        const user = await User.findById(userObjectId).select('_id username');
+        if(!user){
+            return res.status(404).json({ message: "No User Found" });
+        }
+
         const chatObjectId = new mongoose.Types.ObjectId(chatId);
 
         // ✅ update reactions exactly like your socket code
@@ -2880,6 +2908,7 @@ app.post('/api/reaction', authTokenAPI, async (req, res) => {
                 msgId,
                 chatId,
                 userId,
+                username: user.username,
                 emoji,
                 remove: !!remove,
                 reactions: updated?.reactions || []
@@ -3089,7 +3118,7 @@ io.on('connection', (socket) => {
 
     socket.on('reaction', async (data) => {
         try {
-            const { msgId, chatId, emoji, remove, reactions } = data;
+            const { msgId, chatId, username, emoji, remove, reactions } = data;
 
             // basic validation
             if (!mongoose.Types.ObjectId.isValid(msgId)) return;
@@ -3104,6 +3133,7 @@ io.on('connection', (socket) => {
                 msgId,
                 chatId,
                 userId,
+                username,
                 emoji,
                 remove: !!remove,
                 reactions // optional (if you send it from API response)

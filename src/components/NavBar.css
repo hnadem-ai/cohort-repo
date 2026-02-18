@@ -77,6 +77,10 @@
     flex-shrink: 0;
 }
 
+.profile-img-navbar{
+    border-radius: 25px;
+}
+
 /* Labels */
 .nav-btn span {
     color: white;

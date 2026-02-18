@@ -291,7 +291,7 @@
   display: grid;
   place-items: center;
   overflow: hidden;
-  margin-top: 25px;
+  margin-top: 10px;
   border-radius: 50px;
 }
 
@@ -452,7 +452,6 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin: 0 5px 0 40px;
 }
 
 .other-media-msg .msg-text{
@@ -464,7 +463,7 @@
 }
 
 .left{
-  margin-top: 26px;
+  margin-top: 10px;
   margin-left: 0;
 }
 

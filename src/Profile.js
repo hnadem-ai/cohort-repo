@@ -16,13 +16,12 @@ import ReportMenu from './components/ReportMenu';
 
 function Profile(){
     
-    const [loading, setLoading] = useState(true);
-    const { user, accessToken, logout } = useAuth();
+    const [profileLoading, setProfileLoading] = useState(true);
+    const { user, accessToken, logout, loading } = useAuth();
     const { id } = useParams();
     const [open, setOpen] = useState(false);
     const [userObj, setUserObj] = useState(null); 
     const [chats, setChats] = useState([]);
-    const [showChats, setShowChats] = useState(true);
     const [friends, setFriends] = useState([]);
     const [friendRequests, setFriendRequests] = useState([]);
     const [showReport, setShowReport] = useState(false);
@@ -43,7 +42,7 @@ function Profile(){
     const menuRef = refs.setFloating;
 
     useEffect(() => {
-        if (!accessToken) {
+        if (!accessToken && !loading) {
             navigate('/login');
         }
     }, [accessToken]);
@@ -81,7 +80,7 @@ function Profile(){
         }).then(data => {
             setUserObj(data.userDB);
             setFriends(data.userDB.friends)
-            setLoading(false);
+            setProfileLoading(false);
         }).catch(err => {
             console.error(err);
             navigate('/crash')
@@ -89,7 +88,7 @@ function Profile(){
     },[user, accessToken, id]);
 
     useEffect(() => {
-        if(loading) return;
+        if(profileLoading) return;
 
         fetch(`/api/user-chats/${id}`, {
             method: 'GET',
@@ -113,10 +112,10 @@ function Profile(){
             navigate('/crash')
         })
 
-    },[user, loading, id]);
+    },[user, profileLoading, id]);
 
     useEffect(() => {
-        if (!accessToken || loading) return;
+        if (!accessToken || profileLoading) return;
         fetch(`/api/friend-requests`, {
         method: 'GET',
         headers: { authorization: `Bearer ${accessToken}` },
@@ -131,7 +130,7 @@ function Profile(){
             console.error('Error fetching friend requests:', err);
             navigate('/crash');
         });
-    }, [accessToken, loading]);
+    }, [accessToken, profileLoading]);
 
     useSocketEvent(
     'unfriend',
@@ -182,7 +181,7 @@ function Profile(){
                 <div className='profile-heading-container'>
                     <h1 className='profile-heading'>Profile</h1>
                 </div>
-                { loading ? ( <div className='spinner-container'><div className='spinner'></div></div> ) : (
+                { profileLoading ? ( <div className='spinner-container'><div className='spinner'></div></div> ) : (
                     <div className='profile-info-section'>
                         <div className='profile-info-heading-container'>
                             <div className='profile-info-heading'>
@@ -197,6 +196,7 @@ function Profile(){
                                 <div className='name-username-container'>
                                     <h1 className='profile-username'>{userObj.username}</h1>
                                     <h1 className='profile-name'>{userObj.firstName + ' ' + userObj.lastName}</h1>
+                                    {userObj.about && <h1 className='profile-about'>{userObj.about}</h1>}
                                 </div>
                             </div>
                             <div className='profile-btns-container'>
@@ -262,41 +262,35 @@ function Profile(){
                         </div>
 
                         <div className='profile-nav-container'>
-                            <div className='profile-nav-header'>
-                                <button className='profile-nav-btn' onClick={() => setShowChats(true)}>Cohort Boxes</button>
-                                <button className='profile-nav-btn'onClick={() => setShowChats(false)}>Friends</button>
-                            </div>
                             <div className='profile-nav-body'>
-                                { showChats ? (
-                                    <div className='profile-chats-container'>
-                                        <h4 className='profile-chats-heading'>Cohort Boxes</h4>
-                                        { chats.length > 0 ? (
-                                            chats.map((chat, index) => (
-                                                <Link to={'/' + chat._id} style={{textDecoration: 'none'}}><NavChatButton key={index} chat={chat} setSelectedChat={()=> {return}}/></Link>
-                                            )) ) : (
-                                                <div className='no-cohort-boxes'>
-                                                    { isMe ? 'You have no Cohort Boxes!' : "This user has no Cohort Boxes!" }
-                                                </div>
-                                            )
-                                        }
-                                    </div> ) : (
-                                    <div className='profile-friends-container'>
-                                        <h4 className='profile-friends-heading'>Friends</h4>
-                                        { friends?.length > 0 ? (
-                                            friends.map((friend, index) => {
-                                                const id = String(friend._id);
-                                                const isFriend = friendIds.has(id);
-                                                const sentRequest = outgoingPending.has(id);
-                                                const gotRequest = incomingPending.has(id);
-                                                return <Link to={'/profile/' + friend._id} style={{textDecoration: 'none'}}><NavUserButton key={index} user={friend} isFriend={isFriend} sentRequest={sentRequest} gotRequest={gotRequest} setSelectedChat={()=> {return}}/></Link>
-                                            }))  : (
-                                                <div className='no-friends'>
-                                                    { isMe ? 'You have no Friends!' : "This user has no Friends!" }
-                                                </div>
-                                            )
-                                        }
-                                    </div>
-                                )}
+                                <div className='profile-chats-container'>
+                                    <h4 className='profile-chats-heading'>Cohort Boxes</h4>
+                                    { chats.length > 0 ? (
+                                        chats.map((chat, index) => (
+                                            <Link to={'/' + chat._id} style={{textDecoration: 'none'}}><NavChatButton key={index} chat={chat} setSelectedChat={()=> {return}}/></Link>
+                                        )) ) : (
+                                            <div className='no-cohort-boxes'>
+                                                { isMe ? 'You have no Cohort Boxes!' : "This user has no Cohort Boxes!" }
+                                            </div>
+                                        )
+                                    }
+                                </div>
+                                <div className='profile-friends-container'>
+                                    <h4 className='profile-friends-heading'>Friends</h4>
+                                    { friends?.length > 0 ? (
+                                        friends.map((friend, index) => {
+                                            const id = String(friend._id);
+                                            const isFriend = friendIds.has(id);
+                                            const sentRequest = outgoingPending.has(id);
+                                            const gotRequest = incomingPending.has(id);
+                                            return <Link to={'/profile/' + friend._id} style={{textDecoration: 'none'}}><NavUserButton key={index} user={friend} isFriend={isFriend} sentRequest={sentRequest} gotRequest={gotRequest} setSelectedChat={()=> {return}}/></Link>
+                                        }))  : (
+                                            <div className='no-friends'>
+                                                { isMe ? 'You have no Friends!' : "This user has no Friends!" }
+                                            </div>
+                                        )
+                                    }
+                                </div>
                             </div>
                         </div>
                     </div> 

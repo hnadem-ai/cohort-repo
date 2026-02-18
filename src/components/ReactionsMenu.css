@@ -1,0 +1,69 @@
+.reactions-trigger{
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.reactions-popup-menu{
+  background: var(--black);
+  border: 1px solid var(--borderColor);
+  border-radius: 10px;
+  padding: 10px;
+  width: 240px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reactions-popup-title{
+  font-size: 15px;
+  color: var(--fontColor);
+}
+
+.total-reactions{
+    display: flex;
+    justify-content: space-between;
+    color: var(--fontColor);
+}
+
+.total-reactions-emojis{
+    display: flex;
+    align-items: center;
+    gap: 1px;
+}
+
+.total-reactions-emojis span{
+    font-family: 'Emoji';
+}
+
+.total-reactions-count{
+    font-family: 'GM';
+    font-size: 15px;
+}
+
+.reactions-popup-row{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 4px;
+  border-radius: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.reactions-popup-row:hover{
+  background: rgba(255,255,255,0.06);
+}
+
+.reactions-popup-emoji{
+  font-size: 16px;
+  font-family: 'Emoji';
+}
+
+.reactions-popup-count{
+  font-size: 12px;
+  opacity: 0.8;
+}

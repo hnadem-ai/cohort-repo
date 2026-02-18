@@ -64,9 +64,7 @@ function LiveCommentMenu({ selectedChat, comment }) {
                     {isParticipant &&
                         <button className="lm-inner-btn" onClick={handlePin}>Pin</button>
                     }
-                    {comment.from._id !== user.id &&
-                        <button className="lm-inner-btn" onClick={handleReport}>Report</button>
-                    }
+                    <button className="lm-inner-btn" onClick={handleReport}>Report</button>
                 </div>
             )}
         </div>

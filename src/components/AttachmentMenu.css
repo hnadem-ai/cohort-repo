@@ -23,8 +23,8 @@
 
 .am-menu-container{
     position: absolute;
-    top: -160px;
-    height: 150px;
+    top: -60px;
+    height: auto;
     width: 150px;
     border: 1px solid var(--small);
     border-radius: 5px;

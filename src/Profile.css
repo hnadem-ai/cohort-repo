@@ -40,7 +40,8 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0 20px;
+    padding: 20px 20px;
+    border-bottom: 1px solid var(--borderColor);
 }
 
 .profile-info-heading{
@@ -104,7 +105,13 @@
 }
 
 .profile-name{
-    font-size: 1rem;
+    font-size: 1.1rem;
+    color: var(--small);
+}
+
+.profile-about{
+    max-width: 400px;
+    font-size: 0.9rem;
     color: var(--small);
 }
 
@@ -200,7 +207,7 @@
 }
 
 .profile-action-btn{
-    font-family: 'GSM';
+    font-family: 'GM';
     height: 30px;
     border-radius: 5px;
     border: none;
@@ -261,6 +268,8 @@
 }
 
 .profile-nav-body{
+    display: flex;
+    gap: 1rem;
     width: 100%;
     flex: 1;
     padding: 0 20px;
@@ -268,19 +277,21 @@
 }
 
 .profile-chats-container{
-    margin-top: 20px;
     box-sizing: border-box;
-    padding: 20px 0;
     border-radius: 10px;
     display: flex;
     flex-direction: column;
     gap: 10px;
+    flex: 1 1;
 }
 
 .profile-chats-heading{
-    margin: 0;
     color: var(--fontColor);
-    font-size: 1.2rem;
+    font-size: 20px;
+    margin: 0;
+    background-color: var(--searchBoxBg);
+    padding: 10px 10px;
+    border-radius: 4px;
 }
 
 .no-cohort-boxes{
@@ -289,19 +300,21 @@
 }
 
 .profile-friends-container{
-    margin-top: 20px;
     box-sizing: border-box;
-    padding: 20px 0;
     border-radius: 10px;
     display: flex;
     flex-direction: column;
     gap: 10px;
+    flex: 1 1;
 }
 
 .profile-friends-heading{
-    margin: 0;
     color: var(--fontColor);
     font-size: 20px;
+    margin: 0;
+    background-color: var(--searchBoxBg);
+    padding: 10px 10px;
+    border-radius: 4px;
 }
 
 .no-friends{

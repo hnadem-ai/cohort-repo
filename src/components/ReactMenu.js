@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useFloating, offset, flip, autoUpdate } from "@floating-ui/react";
 import reactImg from "../images/reaction-fontcolor.png";
-import "./ReactionMenu.css";
+import "./ReactMenu.css";
 import { useAuth } from "../context/AuthContext";
 import { useSocket } from "../context/SocketContext";
 import EmojiPicker, {EmojiStyle} from "emoji-picker-react";

@@ -1,7 +1,7 @@
 import './ChatInfo.css';
 import addUserIcon from '../images/add-user.png';
 import leaveIcon from '../images/logout.png';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
@@ -348,27 +348,29 @@ function ChatInfo({
 
         <div className={'participant-names-container' + chatInfoClass}>
           {selectedChat.participants.map((participant, index) => (
-            <div key={index} className="chat-info-participant-container">
-              <div className='chat-info-participant-dp-container'>
-                <div className='participant-img-container'>
-                  <img src={participant.dp}/>
+            <Link to={`/profile/${participant._id}`} style={{textDecoration: 'none', color: '#c5cad3'}}>
+              <div key={index} className="chat-info-participant-container">
+                <div className='chat-info-participant-dp-container'>
+                  <div className='participant-img-container'>
+                    <img src={participant.dp}/>
+                  </div>
+                  <div className="chat-info-participant-name-container">
+                    <p className={'participant-name' + chatInfoClass}>
+                      {participant._id === user?.id ? 'You' : participant.firstName + ' ' + participant.lastName}
+                    </p>
+                    {selectedChat.chatAdmin === participant._id && <p className="admin">Admin</p>}
+                  </div>
                 </div>
-                <div className="chat-info-participant-name-container">
-                  <p className={'participant-name' + chatInfoClass}>
-                    {participant._id === user?.id ? 'You' : participant.firstName + ' ' + participant.lastName}
-                  </p>
-                  {selectedChat.chatAdmin === participant._id && <p className="admin">Admin</p>}
-                </div>
+                {selectedChat.chatAdmin === user?.id && participant._id !== user?.id && (
+                  <button
+                    className="participant-remove-btn"
+                    onClick={(e) => handleRemove(e, participant._id, selectedChat._id)}
+                  >
+                    Remove
+                  </button>
+                )}
               </div>
-              {selectedChat.chatAdmin === user?.id && participant._id !== user?.id && (
-                <button
-                  className="participant-remove-btn"
-                  onClick={(e) => handleRemove(e, participant._id, selectedChat._id)}
-                >
-                  Remove
-                </button>
-              )}
-            </div>
+            </Link>
           ))}
         </div>
 

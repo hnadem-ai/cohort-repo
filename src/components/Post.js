@@ -5,7 +5,7 @@ import left from "../images/left-arrow.png";
 import right from "../images/right-arrow.png";
 import VideoPlayer from "./VideoPlayer";
 import AudioPlayer from "./AudioPlayer";
-import ReactionMenu from "./ReactionMenu";
+import ReactionMenu from "./ReactMenu";
 import dotsImg from '../images/dots.png';
 import reportImg from '../images/report.png';
 import ReportMenu from './ReportMenu';

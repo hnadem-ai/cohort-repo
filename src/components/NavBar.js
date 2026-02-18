@@ -20,6 +20,7 @@ function NavBar({ selectedChat }){
     const [notifications, setNotifications] = useState([]);
     const [openNotification, setOpenNotification] = useState(false)
     const [isNewNotification, setIsNewNotification] = useState(false);
+    const [userDB, setUserDB] = useState('');
 
     useEffect(() => {
         if (!accessToken) return;
@@ -38,6 +39,26 @@ function NavBar({ selectedChat }){
             console.log(data)
             setNotifications(data.notifications);
             setIsNewNotification(false);
+        }).catch(err => {
+            console.error(err)
+        });
+    }, [accessToken]);
+
+    useEffect(() => {
+        if (!accessToken) return;
+        fetch('/api/user-dp', {
+            method: 'GET',
+            headers: {
+                'authorization': `Bearer ${accessToken}`
+            },
+            credentials: 'include'
+        }).then(res => {
+            if (!res.ok) {
+                throw new Error();
+            }
+            return res.json();
+        }).then(data => {
+            setUserDB(data.dp);
         }).catch(err => {
             console.error(err)
         });
@@ -115,7 +136,7 @@ function NavBar({ selectedChat }){
             <section className="nav-btn-container">
                 <Link to={user ? `/profile/${user.id}` : '/login'} style={{textDecoration: 'none'}}>
                     <button className="nav-btn">
-                        <img src={profileImg} alt="Profile" className="nav-btn-img"/>
+                        <img src={userDB ? userDB :  profileImg} alt="Profile" className="nav-btn-img profile-img-navbar"/>
                         <span>PROFILE</span>
                     </button>
                 </Link>

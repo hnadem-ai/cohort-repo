@@ -2,7 +2,8 @@ import { useAuth } from '../context/AuthContext.js';
 import './AudioMessage.css';
 import AudioPlayer from './AudioPlayer.js';
 import MessageMenu from './MessageMenu.js';
-import ReactionMenu from './ReactionMenu.js';
+import ReactionMenu from './ReactMenu.js';
+import ReactionsMenu from './ReactionsMenu.js';
 import { useEffect, useState } from 'react';
 
 export default function AudioMessage({ newSender, setIsReply, setRepliedTo, msg, setMessages, sender, selectedChat, setClickedMsg }){
@@ -82,10 +83,8 @@ export default function AudioMessage({ newSender, setIsReply, setRepliedTo, msg,
                     </div>
                     <span className="msg-time">{formatTime(msg.timestamp)}</span>
                     {msg.reactions?.length > 0 && (
-                        <div className={msg.from === user.id ? "my-reactions" : "other-reactions"}>
-                            <span className="reaction-bubble">
-                                <span>{groupReactions(msg.reactions)[0].emoji}</span>{groupReactions(msg.reactions)[1] && <span>{groupReactions(msg.reactions)[1]?.emoji}</span>}{msg.reactions.length > 1 && <span className="reaction-count">{msg.reactions.length}</span>}
-                            </span>
+                        <div className={String(msg.from._id) === String(user.id) ? "my-reactions" : "other-reactions"}>
+                            <ReactionsMenu reactions={msg.reactions} />
                         </div>
                     )}
                 </div>
