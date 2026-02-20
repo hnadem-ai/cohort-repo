@@ -1,9 +1,8 @@
-// components/ReactionsPopup.jsx
-import './ReactionsMenu.css';
-import { useEffect, useState } from "react";
+import "./ReactionsMenu.css";
+import { useEffect, useMemo, useState } from "react";
 import { useFloating, offset, flip, shift } from "@floating-ui/react";
 
-export default function ReactionsPopup({ reactions = [] }) {
+export default function ReactionsPopup({ reactions = [], selectedChat }) {
     const [open, setOpen] = useState(false);
 
     const { refs, floatingStyles } = useFloating({
@@ -11,14 +10,46 @@ export default function ReactionsPopup({ reactions = [] }) {
         middleware: [offset(4), flip(), shift({ padding: 8 })],
     });
 
-    // group counts
-    const grouped = reactions.reduce((acc, r) => {
-        acc[r.emoji] = (acc[r.emoji] || 0) + 1;
-        return acc;
-    }, {});
+    // ✅ participant id set
+    // Create map of participantId -> full participant object
+    const participantMap = useMemo(() => {
+        const map = new Map();
 
-    const list = Object.entries(grouped).map(([emoji, count]) => ({ emoji, count }));
-    const topEmojis = list.slice(0, 5);
+        (selectedChat?.participants || []).forEach(p => {
+            const id = String(p?._id ?? p);
+            map.set(id, p);
+        });
+
+        return map;
+    }, [selectedChat?._id, selectedChat?.participants]);
+
+
+    // Replace reaction.userId with full participant object
+    const participantReactions = useMemo(() => {
+        return (reactions || [])
+            .map(r => {
+                const uid = String(r?.userId?._id ?? r?.userId);
+                const participant = participantMap.get(uid);
+
+                if (!participant) return null;
+
+                return {
+                    ...r,
+                    userId: participant // 🔥 replace with full object
+                };
+            })
+            .filter(Boolean);
+    }, [reactions, participantMap]);
+
+    // ✅ group for top emojis + total count (based on filtered)
+    const { list, topEmojis, totalCount } = useMemo(() => {
+        const grouped = participantReactions.reduce((acc, r) => {
+            acc[r.emoji] = (acc[r.emoji] || 0) + 1;
+            return acc;
+        }, {});
+        const list = Object.entries(grouped).map(([emoji, count]) => ({ emoji, count }));
+        return { list, topEmojis: list.slice(0, 5), totalCount: participantReactions.length };
+    }, [participantReactions]);
 
     useEffect(() => {
         function handleClickOutside(e) {
@@ -36,11 +67,10 @@ export default function ReactionsPopup({ reactions = [] }) {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [open, refs]);
 
-    if (!reactions || reactions.length === 0) return null;
+    if (!participantReactions.length) return null;
 
     return (
         <div className="reactions-popup-root">
-            {/* Trigger = reactions bubble */}
             <button
                 ref={refs.setReference}
                 type="button"
@@ -48,9 +78,8 @@ export default function ReactionsPopup({ reactions = [] }) {
                 onClick={() => setOpen(prev => !prev)}
             >
                 <span className="reaction-bubble">
-                    <span>{list[0]?.emoji}</span>
-                    {list[1] && <span>{list[1].emoji}</span>}
-                    {reactions.length > 1 && <span className="reaction-count">{reactions.length}</span>}
+                    {topEmojis.map(e => <span key={e.emoji}>{e.emoji}</span>)}
+                    <span className="reaction-count">{totalCount}</span>
                 </span>
             </button>
 
@@ -61,24 +90,29 @@ export default function ReactionsPopup({ reactions = [] }) {
                     className="reactions-popup-menu"
                 >
                     <div className="reactions-popup-title">Reactions</div>
-                    <div className='total-reactions'>
-                        <div className='total-reactions-emojis'>
-                            {
-                                list.slice(0, 5).map(e => <span key={e.emoji}>{e.emoji}</span>)
-                            }
+
+                    <div className="total-reactions">
+                        <div className="total-reactions-emojis">
+                            {topEmojis.map(e => <span key={e.emoji}>{e.emoji}</span>)}
                         </div>
-                        <span className='total-reactions-count'>{reactions.length}</span>
+                        <span className="total-reactions-count">{totalCount}</span>
                     </div>
-                        <div className="reactions-popup-list">
-                            {reactions.map(item => (
-                                <div key={item.emoji} className="reactions-popup-row">
-                                    <span className="reactions-popup-username">{item.userId.username}</span>
-                                    <span className="reactions-popup-emoji">{item.emoji}</span>
-                                </div>
-                            ))}
-                        </div>
+
+                    <div className="reactions-popup-list">
+                        {participantReactions.map((item, idx) => (
+                            <div
+                                key={`${String(item.userId?._id ?? item.userId)}-${item.emoji}-${idx}`}
+                                className="reactions-popup-row"
+                            >
+                                <span className="reactions-popup-username">
+                                    {item.userId?.username || "Unknown"}
+                                </span>
+                                <span className="reactions-popup-emoji">{item.emoji}</span>
+                            </div>
+                        ))}
                     </div>
-      )}
                 </div>
-            );
+            )}
+        </div>
+    );
 }

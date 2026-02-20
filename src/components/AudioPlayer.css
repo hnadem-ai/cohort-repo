@@ -10,8 +10,8 @@
 .audio-btn {
   border: none;
   border-radius: 50%;
-  width: 36px;
-  height: 36px;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -25,7 +25,6 @@
 
 .audio-slider {
   flex: 1;
-  -webkit-appearance: none;
   height: 100px;
   border-radius: 5px;
   background: transparent; /* let track control colors */
@@ -35,27 +34,30 @@
 
 /* Track (unplayed + played in WebKit browsers) */
 .audio-slider::-webkit-slider-runnable-track {
-  height: 10px;
+  height: 2px;
   border-radius: 10px;
   background: linear-gradient(
     to right,
-    var(--small) 0%,
-    var(--small) var(--progress, 0%),
-    #ddd var(--progress, 0%),
-    #ddd 100%
+    var(--green) 0%,
+    var(--green) var(--progress, 0%),
+    #1ff200 var(--progress, 0%),
+    #1ff200 100%
   );
+  border: none;
 }
 
 /* Thumb */
 .audio-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 15px;
-  height: 15px;
+  border: none;
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
-  background: var(--black, #000);
+  color: #1ff200;
+  background: #1ff200;
   cursor: pointer;
-  margin-top: -3px; /* center thumb vertically */
+  margin-top: -7px; /* center thumb vertically */
 }
 
 .audio-time {

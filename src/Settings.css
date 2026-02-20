@@ -42,8 +42,8 @@
     flex-direction: column;
     justify-content: center;
     gap: 1rem;
-    width: 400px;
-    height: 300px;
+    width: 600px;
+    height: 450px;
     padding: 0.8rem 1rem;
     border: 1px solid var(--borderColor);
     background-color: var(--chatBoxBg);
@@ -51,12 +51,17 @@
 }
 
 .settings-body h1{
-    font-size: 1rem;
     color: var(--fontColor);
 }
 
-.about{
-    align-items: flex-start;
+.settings-body .username{
+    font-size: 1.3rem;
+    color: var(--small);
+    font-family: 'GR';
+}
+
+.heading-container{
+    margin-bottom: 30px;
 }
 
 .info-edit-btn-container{
@@ -67,8 +72,8 @@
 }
 
 .info-edit-btn-container .dp-container{
-    height: 30px;
-    width: 30px;
+    height: 50px;
+    width: 50px;
     border-radius: 30px;
     overflow: hidden;
     display: grid;
@@ -76,19 +81,23 @@
 }
 
 .info-edit-btn-container .dp-container img{
-    height: 30px;
-    width: 30px;
+    height: 50px;
+    width: 50px;
     display: grid;
     place-items: center;
 }
 
 .info-edit-btn-container .info-container{
     display: flex;
-    gap: 6px;
-    align-items: center;
+    flex-direction: column;
 }
 
 .info-edit-btn-container .info-container h1, .info-edit-btn-container .info-container p{
+    font-size: 1.1rem;
+    color: var(--fontColor);
+}
+
+.info-edit-btn-container .info-container p{
     font-size: 0.9rem;
     color: var(--fontColor);
 }
@@ -101,27 +110,41 @@
 }
 
 .info-edit-btn-container button {
-    padding: 4px;
-    background-color: var(--borderColor);
-    border: none;
+    background-color: var(--black);
+    border: 1px solid var(--green);
+    border-radius: 22px;
     color: var(--fontColor);
-    font-size: 0.7rem;
-    transition: 0.2s ease;
-    border-radius: 4px;
-    max-height: 20px;
+    font-size: .9rem;
+    font-family: 'GM';
+    max-height: 31px;
+    padding: 4px;
+    transition: .2s ease;
+    height: 60px;
+    width: 110px;
 }
 
 .info-edit-btn-container button:hover {
-    background-color: var(--hover);
+    border-radius: 4px;
 }
 
 .info-edit-btn-container .delete-acc-btn{
     background-color: red;
-    color: #fff;
-    font-size: 0.9rem;
-    padding: 6px;
     border: none;
-    border-radius: 4px;
+    border-radius: 35px;
+    color: #fff;
     display: grid;
+    font-size: .9rem;
+    padding: 6px;
     place-content: center;
+    width: 130px;
+    margin-top: 20px;
+}
+
+.about{
+    align-items: flex-start;
+}
+
+.acc-info-heading{
+    font-size: 1.7rem;
+
 }

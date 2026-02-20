@@ -75,7 +75,7 @@ export default function TextMessage({ newSender, setIsReply, setRepliedTo, msg, 
                     <span className="msg-time">{formatTime(msg.timestamp)}</span>
                     {msg.reactions?.length > 0 && (
                         <div className={String(msg.from._id) === String(user.id) ? "my-reactions" : "other-reactions"}>
-                            <ReactionsMenu reactions={msg.reactions} />
+                            <ReactionsMenu reactions={msg.reactions} msgId={msg._id} selectedChat={selectedChat} />
                         </div>
                     )}
                 </div>

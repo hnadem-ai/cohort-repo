@@ -252,6 +252,7 @@ function Home() {
 
   useEffect(() => {
     if (!selectedChat) return;
+    
 
     setChats(prev =>
       prev.map(chat =>

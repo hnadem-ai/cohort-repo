@@ -1569,7 +1569,6 @@ app.get('/api/messages/:chatId', authTokenAPI, async (req, res) => {
             .sort({ _id: -1 }) // newest first
             .limit(limit)
             .populate('from', '_id firstName lastName username dp')
-            .populate('reactions.userId', '_id username')
             .lean();
 
         // Optionally populate repliedTo if isReply is true
@@ -1593,6 +1592,58 @@ app.get('/api/messages/:chatId', authTokenAPI, async (req, res) => {
     } catch (err) {
         console.log(err);
         res.status(500).json({ message: 'Server Error!' });
+    }
+});
+
+app.get("/api/participant-reaction/:msgId", authTokenAPI, async (req, res) => {
+    try {
+        const { msgId } = req.params;
+        const requesterId = String(req.user.id);
+
+        if (!mongoose.Types.ObjectId.isValid(msgId)) {
+            return res.status(400).json({ message: "Invalid messageId" });
+        }
+
+        // 1️⃣ Find message
+        const message = await Message.findById(msgId)
+            .select("chatId reactions")
+            .populate("reactions.userId", "_id username")
+            .lean();
+
+        if (!message) {
+            return res.status(404).json({ message: "Message not found" });
+        }
+
+        // 2️⃣ Get participants using your cache function
+        const participantsSet = await getParticipants(message.chatId);
+        if (!participantsSet) {
+            return res.status(404).json({ message: "Chat not found" });
+        }
+
+        // 4️⃣ Filter reactions to only participants
+        const filteredReactions = message.reactions
+            .filter(r => {
+                const uid = r.userId?._id
+                    ? String(r.userId._id)
+                    : String(r.userId);
+                return participantsSet.has(uid);
+            })
+            .map(r => ({
+                userId: {
+                    _id: r.userId._id,
+                    username: r.userId.username
+                },
+                emoji: r.emoji
+            }));
+
+        return res.status(200).json({
+            messageId: msgId,
+            reactions: filteredReactions
+        });
+
+    } catch (err) {
+        console.error("participant-reaction error:", err);
+        return res.status(500).json({ message: "Internal Server Error" });
     }
 });
 
