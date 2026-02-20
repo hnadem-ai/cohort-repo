@@ -10,7 +10,6 @@ import {ReactComponent as MyPlusIcon} from '../images/plus-icon.svg';
 
 function getMyReaction(message, userId) {
   if (!message?.reactions || !userId) return null;
-
   const reaction = message.reactions.find(
     (r) => String(r.userId) === String(userId)
   );
@@ -19,6 +18,7 @@ function getMyReaction(message, userId) {
 }
 
 function ReactionMenu({ msg, isPost = false, onReactLocal }) {
+  console.log(msg)
   const { socket } = useSocket();
   const { user, accessToken } = useAuth();
   const [open, setOpen] = useState(false);

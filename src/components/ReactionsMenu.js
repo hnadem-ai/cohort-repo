@@ -41,15 +41,28 @@ export default function ReactionsPopup({ reactions = [], selectedChat }) {
             .filter(Boolean);
     }, [reactions, participantMap]);
 
+    const allTopEmojis = useMemo(() => {
+        const grouped = (reactions || []).reduce((acc, r) => {
+            if (!r?.emoji) return acc;
+            acc[r.emoji] = (acc[r.emoji] || 0) + 1;
+            return acc;
+        }, {});
+
+        return Object.entries(grouped)
+            .map(([emoji, count]) => ({ emoji, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 5);
+    }, [reactions]);
+
     // ✅ group for top emojis + total count (based on filtered)
     const { list, topEmojis, totalCount } = useMemo(() => {
-        const grouped = participantReactions.reduce((acc, r) => {
+        const grouped = reactions.reduce((acc, r) => {
             acc[r.emoji] = (acc[r.emoji] || 0) + 1;
             return acc;
         }, {});
         const list = Object.entries(grouped).map(([emoji, count]) => ({ emoji, count }));
-        return { list, topEmojis: list.slice(0, 5), totalCount: participantReactions.length };
-    }, [participantReactions]);
+        return { list, topEmojis: list.slice(0, 5), totalCount: reactions.length };
+    }, [reactions]);
 
     useEffect(() => {
         function handleClickOutside(e) {
@@ -67,8 +80,6 @@ export default function ReactionsPopup({ reactions = [], selectedChat }) {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [open, refs]);
 
-    if (!participantReactions.length) return null;
-
     return (
         <div className="reactions-popup-root">
             <button
@@ -78,7 +89,7 @@ export default function ReactionsPopup({ reactions = [], selectedChat }) {
                 onClick={() => setOpen(prev => !prev)}
             >
                 <span className="reaction-bubble">
-                    {topEmojis.map(e => <span key={e.emoji}>{e.emoji}</span>)}
+                    {allTopEmojis.slice(0,2).map(e => <span key={e.emoji}>{e.emoji}</span>)}
                     <span className="reaction-count">{totalCount}</span>
                 </span>
             </button>
@@ -93,7 +104,7 @@ export default function ReactionsPopup({ reactions = [], selectedChat }) {
 
                     <div className="total-reactions">
                         <div className="total-reactions-emojis">
-                            {topEmojis.map(e => <span key={e.emoji}>{e.emoji}</span>)}
+                            {allTopEmojis.map(e => <span key={e.emoji}>{e.emoji}</span>)}
                         </div>
                         <span className="total-reactions-count">{totalCount}</span>
                     </div>

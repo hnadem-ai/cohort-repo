@@ -10,7 +10,7 @@ import reactImg from "../images/reaction-fontcolor.png";
 import closeImg from '../images/close-gray.png';
 import sendImg from '../images/send.png';
 import micImg from '../images/microphone.png';
-import {ReactComponent as MyFilterIcon} from '../images/filter-6556.svg';
+import downImg from '../images/down-arrow.png';
 import recordingIcon from '../images/voice.png';
 import { useNavigate } from 'react-router-dom';
 import MediaView from './MediaView.js';
@@ -42,11 +42,10 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
   const [loadingMore, setLoadingMore] = useState(false);
   const [isReply, setIsReply] = useState(false);
   const [repliedTo, setRepliedTo] = useState(null);
-  const [visible, setVisible] = useState(false);
+  const [showNewMsgPill, setShowNewMsgPill] = useState(false);
 
   const MAX_AUDIO_MS = 10 * 60 * 1000; // 10 minutes
   const stopTimeoutRef = useRef(null);
-  const timeoutRef = useRef(null);
   const messagesBoxRef = useRef(null);
   const loadingMoreRef = useRef(false);
   const recorderRef = useRef(null);
@@ -71,7 +70,20 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
       top: el.scrollHeight,
       behavior: smooth ? "smooth" : "auto",
     });
+
+    setShowNewMsgPill(false);
   }
+
+  function isNearBottom(threshold = 80) {
+    const el = messagesBoxRef.current;
+    if (!el) return true;
+
+    return el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+  }
+
+  useEffect(() => {
+    setShowNewMsgPill(false);
+  }, [selectedChat?._id]);
 
   useEffect(() => {
     return () => {
@@ -87,43 +99,54 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
     }
   });
 
-  useSocketEvent(
-    "message",
-    (payload) => {
-      // your emits sometimes send { message: msg }
-      const msg = payload;
-      if (!msg || !selectedChat?._id) return;
+  useSocketEvent("message",(payload) => {
+    const msg = payload;
+    if (!msg || !selectedChat?._id) return;
 
-      // only if message belongs to this chat
-      if (String(msg.chatId) !== String(selectedChat._id)) return;
+    if (String(msg.chatId) !== String(selectedChat._id)) return;
 
-      // only if message is NOT mine
-      if (String(msg.from?._id ?? msg.from) === String(user.id)) return;
+    const senderId = String(msg.from?._id);
 
-      // scroll to bottom
+    if (senderId === String(user.id)) {
+      return;
+    }
+
+    if (isNearBottom()) {
+      // user is already near bottom → scroll
       setTimeout(() => scrollToBottom(true), 0);
-    },
-    [selectedChat?._id, user?.id]
-  );
+    } else {
+      // user scrolled up → show pill
+      setShowNewMsgPill(true);
+    }
+  }, [selectedChat?._id, user?.id]);
+
+  useSocketEvent("messagesBatch", (payload) => {
+    console.log('Helloofrom chatBox')
+    if (String(payload.chatId) !== String(selectedChat._id)) return;
+
+    if (isNearBottom()) {
+      // user is already near bottom → scroll
+      setTimeout(() => scrollToBottom(true), 0);
+    } else {
+      // user scrolled up → show pill
+      setShowNewMsgPill(true);
+    }
+  }, [selectedChat?._id]);
 
   useEffect(() => {
     const parent = messagesBoxRef.current;
     if (!parent) return;
 
     const onScroll = () => {
-      setVisible(true);
-
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = setTimeout(() => {
-        setVisible(false);
-      }, 4000);
+      if (isNearBottom()) {
+        setShowNewMsgPill(false);
+      }
     };
 
     parent.addEventListener('scroll', onScroll);
 
     return () => {
       parent.removeEventListener('scroll', onScroll);
-      clearTimeout(timeoutRef.current);
     };
   }, []);
 
@@ -318,7 +341,6 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
   }, [selectedChat, accessToken, socket, user.id]);
 
   useEffect(() => {
-    console.log('hello')
     const el = messagesBoxRef.current;
     if (!el) return;
 
@@ -678,6 +700,16 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
       { files.length > 0 && <MediaMessagePreview files={files} setFiles={setFiles} selectedChat={selectedChat} setMessages={setMessages} isReply={isReply} repliedTo={repliedTo} setIsReply={setIsReply} setRepliedTo={setRepliedTo}/> }
       {clickedMedia && clickedMsg && <MediaView msg={clickedMsg} media={clickedMedia} setClickedMedia={setClickedMedia}/>}
       { selectedChat && <ChatInfo setChats={setChats}selectedChat={selectedChat} setSelectedChat={setSelectedChat} chatInfoClass={chatInfoClass} setChatInfoClass={setChatInfoClass} setMessages={setMessages}/> }
+      {showNewMsgPill && (
+        <button
+          type="button"
+          className="new-msg-pill"
+          onClick={() => scrollToBottom(true)}
+        >
+          <img src={downImg}/>
+          <p>New Message</p>
+        </button>
+      )}
       { selectedChat &&
         (<div className='chat-heading-and-btns-container'>
             <div className='chatName-chatDp-container'>
@@ -776,7 +808,7 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
 
             { recording ? (
               <div className='recording-indicator'>
-                <img src={recordingIcon} className='recording-img'/>
+                <img src={recordingIcon} className='recording-img'/>  
                 <p>Recording......</p>
               </div>
             ) : (

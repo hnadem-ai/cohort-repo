@@ -226,7 +226,7 @@ function Home() {
     setMessages(prev =>
       prev.map(msg =>
         String(msg._id) === String(msgId)
-          ? { ...msg, reactions: updateReactions(msg.reactions, { emoji, msgId, userId: {_id: userId, username} }) }
+          ? { ...msg, reactions: updateReactions(msg.reactions, { emoji, msgId, userId }) }
           : msg
       )
     );

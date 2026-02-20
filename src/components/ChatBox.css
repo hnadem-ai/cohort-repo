@@ -180,6 +180,74 @@
   -webkit-scrollbar-width: thin;
 }
 
+.new-msg-pill {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 90px;
+  padding: 5px;
+
+  background: var(--fontColor);
+  border: 1px solid var(--borderColor);
+  border-radius: 50px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+
+  cursor: pointer;
+  z-index: 9999;
+
+  animation: dropletBob 1.8s ease-in-out infinite;
+  transition: all 0.2s ease;
+}
+
+/* The inverted droplet tail */
+.new-msg-pill::after {
+  content: "";
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+
+  width: 0;
+  height: 0;
+
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 12px solid var(----fontColor);
+}
+
+/* Arrow image */
+.new-msg-pill img {
+  width: 15px;
+  height: 15px;
+}
+
+.new-msg-pill p{
+  color: var(----fontColor);
+  font-size: 12px;
+  font-family: 'GR';
+}
+
+/* Hover effect */
+.new-msg-pill:hover {
+  transform: translateX(-50%) scale(1.08);
+}
+
+@keyframes dropletBob {
+  0% {
+    transform: translateX(-50%) translateY(0px);
+  }
+  50% {
+    transform: translateX(-50%) translateY(-3px);
+  }
+  100% {
+    transform: translateX(-50%) translateY(0px);
+  }
+}
+
 .filter-btn{
   height: 40px;
   width: 40px;
