@@ -1,6 +1,6 @@
 import './ChatBox.css';
-import { useState, useRef, useEffect } from 'react';
-import EmojiPicker, {EmojiStyle} from 'emoji-picker-react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import EmojiPicker, { EmojiStyle } from 'emoji-picker-react';
 import { useFloating, offset, autoUpdate, flip } from '@floating-ui/react';
 import { useAuth } from '../context/AuthContext';
 import ChatInfo from './ChatInfo';
@@ -20,14 +20,13 @@ import TextMessage from './TextMessage.js';
 import MediaMessage from './MediaMessage.js';
 import AudioMessage from './AudioMessage.js';
 import ChatInfoMessage from './ChatInfoMessage.js';
-import {ReactComponent as MyIcon} from '../images/comment.svg';
+import { ReactComponent as MyIcon } from '../images/comment.svg';
 
 
-function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, messages, setMessages, typingUsers, setShowLiveChat }){
-
+function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, messages, setMessages, typingUsers, setShowLiveChat, showLiveChat, focusMessageId, clearFocus }) {
+  console.log(focusMessageId)
   const senderColors = ['#c76060', '#c79569', '#c7c569', '#6ec769', '#69c2c7', '#6974c7', '#9769c7', '#c769bf']
 
-  console.log(selectedChat)
   const { socket } = useSocket();
   const [files, setFiles] = useState([]);
   const [chatInfoClass, setChatInfoClass] = useState(' hidden');
@@ -43,6 +42,7 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
   const [isReply, setIsReply] = useState(false);
   const [repliedTo, setRepliedTo] = useState(null);
   const [showNewMsgPill, setShowNewMsgPill] = useState(false);
+  const [newLiveChatMsg, setNewLiveChatMsg] = useState(false);
 
   const MAX_AUDIO_MS = 10 * 60 * 1000; // 10 minutes
   const stopTimeoutRef = useRef(null);
@@ -52,15 +52,37 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
   const chunksRef = useRef([]);
   const emojiPickerRef = useRef(null);
   const msgRef = useRef(null);
+  const msgRefs = useRef({});
   const caretPosRef = useRef(0);
   const PAGE_SIZE = 20;
-  
+
   const { refs, floatingStyles } = useFloating({
     placement: "top-start",
     middleware: [offset(4), flip()],
     whileElementsMounted: autoUpdate
   });
+
   const navigate = useNavigate();
+
+  const isFocusingRef = useRef(false);
+
+  useEffect(() => {
+    if (!focusMessageId) return;
+
+    const container = messagesBoxRef.current;
+    const node = msgRefs.current[String(focusMessageId)];
+
+    if (!container || !node) return;
+
+    // Scroll directly to the element
+    node.scrollIntoView({
+      behavior: "smooth",
+      block: "center",   // center it in the container
+    });
+
+    clearFocus?.();
+
+  }, [focusMessageId, messages.length]);
 
   function scrollToBottom(smooth = true) {
     const el = messagesBoxRef.current;
@@ -92,16 +114,43 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
     };
   }, []);
 
-  useSocketEvent('liveViewerCount', ({chatId, count}) => {
-    if(chatId === selectedChat._id){
+  useEffect(() => {
+    if (!focusMessageId) return;
+    if (!hasMoreMsgs) return;
+
+    const node = msgRefs.current[String(focusMessageId)];
+    if (node) return; // already in DOM
+
+    // not loaded yet → load older once
+    loadOlderMessages();
+  }, [focusMessageId, messages.length, hasMoreMsgs]);
+  
+  useEffect(() => {
+    if (!focusMessageId) return;
+    console.log(
+      "focus exists in state?",
+      messages.some(m => String(m._id) === String(focusMessageId))
+    );
+  }, [focusMessageId, messages]);
+
+  useSocketEvent('liveViewerCount', ({ chatId, count }) => {
+    if (chatId === selectedChat._id) {
       console.log('hi from liveViewerCount');
       setChatLiveCount(count);
     }
   });
 
-  useSocketEvent("message",(payload) => {
+  useSocketEvent('liveComment', ({ chatId, comment }) => {
+    console.log('A live comment came')
+    if (String(chatId) === String(selectedChat._id) && !showLiveChat) {
+      setNewLiveChatMsg(true);
+    }
+  })
+
+  useSocketEvent("message", (payload) => {
     const msg = payload;
     if (!msg || !selectedChat?._id) return;
+    if (isFocusingRef.current) return;
 
     if (String(msg.chatId) !== String(selectedChat._id)) return;
 
@@ -121,6 +170,7 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
   }, [selectedChat?._id, user?.id]);
 
   useSocketEvent("messagesBatch", (payload) => {
+    if (isFocusingRef.current) return;
     console.log('Helloofrom chatBox')
     if (String(payload.chatId) !== String(selectedChat._id)) return;
 
@@ -171,7 +221,6 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
   }, [showEmoji]);
 
   async function loadOlderMessages() {
-    console.log('loadOlderMessages ran!')
     if (!selectedChat) return;
     if (!hasMoreMsgs) return;
     if (loadingMoreRef.current) return;
@@ -179,41 +228,54 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
     const el = messagesBoxRef.current;
     if (!el) return;
 
+    // 1) capture BEFORE values
+    const prevScrollHeight = el.scrollHeight;
+    const prevScrollTop = el.scrollTop;
+
     try {
       setLoadingMore(true);
       loadingMoreRef.current = true;
 
-      // STATE ORDER: [ newest ... oldest ]
       const oldest = messages[messages.length - 1];
       if (!oldest?._id) return;
 
       const res = await fetch(
         `/api/messages/${encodeURIComponent(selectedChat._id)}?limit=${PAGE_SIZE}&before=${oldest._id}`,
-        {
-          method: "GET",
-          headers: { authorization: `Bearer ${accessToken}` },
-        }
+        { method: "GET", headers: { authorization: `Bearer ${accessToken}` } }
       );
 
       if (!res.ok) throw new Error("Load older failed");
       const data = await res.json();
-
       const olderBatch = data.msgs || [];
 
-      // ✅ APPEND older messages (critical fix)
+      if (olderBatch.length === 0) {
+        setHasMoreMsgs(false);
+        return;
+      }
+
+      // 2) update messages
       setMessages(prev => [...prev, ...olderBatch]);
       setHasMoreMsgs(Boolean(data.hasMore));
 
-      // ✅ DO NOT touch scrollTop
+      // 3) after DOM updates, offset scrollTop by delta
+      setTimeout(() => {
+        // const el2 = messagesBoxRef.current;
+        // if (!el2) return;
+
+        // const newScrollHeight = el2.scrollHeight;
+        // const delta = newScrollHeight - prevScrollHeight;
+
+        // el2.scrollTop = prevScrollTop + delta;
+      }, 0);
+
     } catch (e) {
       console.error(e);
-      navigate('/crash')
+      navigate("/crash");
     } finally {
       setLoadingMore(false);
       loadingMoreRef.current = false;
     }
   }
-
   useEffect(() => {
     if (!selectedChat) return;
 
@@ -246,8 +308,7 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
         // scroll to bottom after first load
         setTimeout(() => {
           if (cancelled) return;
-          const el = messagesBoxRef.current;
-          if (el) el.scrollTop = el.scrollHeight;
+          if (focusMessageId) return; 
         }, 0);
 
         // ---------- 2) JOIN/OPEN CHAT LOGIC ----------
@@ -338,7 +399,7 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
         typingTimeoutRef.current = null;
       }
     };
-  }, [selectedChat, accessToken, socket, user.id]);
+  }, [selectedChat, accessToken, socket, user.id, focusMessageId]);
 
   useEffect(() => {
     const el = messagesBoxRef.current;
@@ -355,7 +416,7 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
     return () => el.removeEventListener("scroll", onScroll);
   }, [messages, hasMoreMsgs, selectedChat, accessToken]);
 
-  function handleSubscribe(e){
+  function handleSubscribe(e) {
     e.preventDefault();
     fetch('/api/chat/subscribe', {
       method: 'PATCH',
@@ -365,7 +426,7 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
       },
       body: JSON.stringify({ chatId: selectedChat._id })
     }).then(res => {
-      if(!res.ok){
+      if (!res.ok) {
         throw new Error();
       }
       return res.json();
@@ -380,7 +441,7 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
     })
   }
 
-  function handleUnsubscribe(e){
+  function handleUnsubscribe(e) {
     e.preventDefault();
     fetch('/api/chat/unsubscribe', {
       method: 'PATCH',
@@ -390,7 +451,7 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
       },
       body: JSON.stringify({ chatId: selectedChat._id })
     }).then(res => {
-      if(!res.ok){
+      if (!res.ok) {
         throw new Error();
       }
       return res.json();
@@ -405,22 +466,22 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
     })
   }
 
-  function handleCloseChat(e){
-      e.preventDefault();
-      setSelectedChat(null);
-      setMessages([]);
-      setMessage('');
-      setChatLiveCount(0);
-      if(paramChatId){
-        navigate('/')
-      }
+  function handleCloseChat(e) {
+    e.preventDefault();
+    setSelectedChat(null);
+    setMessages([]);
+    setMessage('');
+    setChatLiveCount(0);
+    if (paramChatId) {
+      navigate('/')
+    }
   }
 
   const typingTimeoutRef = useRef(null);
   const isTypingRef = useRef(false);
 
   function handleInputChange(e) {
-    const text = e.target.value; 
+    const text = e.target.value;
     setMessage(text);
 
     if (socket && selectedChat) {
@@ -474,7 +535,7 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
             chatId: selectedChat._id,
             type: 'text',
             isReply: isReply ? true : false,
-            repliedTo: (isReply && repliedTo) ? repliedTo : null ,
+            repliedTo: (isReply && repliedTo) ? repliedTo : null,
             reactions: [],
             media: [],
             message: message.trim(),
@@ -505,7 +566,7 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
             setMessages(prev =>
               prev.map(m =>
                 String(m._id) === String(data.optimisticId)
-                  ? { ...data.message}
+                  ? { ...data.message }
                   : m
               )
             );
@@ -680,16 +741,17 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
     caretPosRef.current = newCaretPos
 
     setTimeout(() => {
-    if (msgRef.current) {
-      msgRef.current.selectionStart = newCaretPos;
-      msgRef.current.selectionEnd = newCaretPos;
-      msgRef.current.focus();
-    }}, 0)
+      if (msgRef.current) {
+        msgRef.current.selectionStart = newCaretPos;
+        msgRef.current.selectionEnd = newCaretPos;
+        msgRef.current.focus();
+      }
+    }, 0)
 
     setMessage(newText);
   }
 
-  function saveCaret(e){
+  function saveCaret(e) {
     caretPosRef.current = e.target.selectionStart;
   }
 
@@ -697,38 +759,41 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
 
   return (
     <div className="chat-box">
-      { files.length > 0 && <MediaMessagePreview files={files} setFiles={setFiles} selectedChat={selectedChat} setMessages={setMessages} isReply={isReply} repliedTo={repliedTo} setIsReply={setIsReply} setRepliedTo={setRepliedTo}/> }
-      {clickedMedia && clickedMsg && <MediaView msg={clickedMsg} media={clickedMedia} setClickedMedia={setClickedMedia}/>}
-      { selectedChat && <ChatInfo setChats={setChats}selectedChat={selectedChat} setSelectedChat={setSelectedChat} chatInfoClass={chatInfoClass} setChatInfoClass={setChatInfoClass} setMessages={setMessages}/> }
+      {files.length > 0 && <MediaMessagePreview files={files} setFiles={setFiles} selectedChat={selectedChat} setMessages={setMessages} isReply={isReply} repliedTo={repliedTo} setIsReply={setIsReply} setRepliedTo={setRepliedTo} />}
+      {clickedMedia && clickedMsg && <MediaView msg={clickedMsg} media={clickedMedia} setClickedMedia={setClickedMedia} />}
+      {selectedChat && <ChatInfo setChats={setChats} selectedChat={selectedChat} setSelectedChat={setSelectedChat} chatInfoClass={chatInfoClass} setChatInfoClass={setChatInfoClass} setMessages={setMessages} />}
       {showNewMsgPill && (
         <button
           type="button"
           className="new-msg-pill"
           onClick={() => scrollToBottom(true)}
         >
-          <img src={downImg}/>
+          <img src={downImg} />
           <p>New Message</p>
         </button>
       )}
-      { selectedChat &&
+      {selectedChat &&
         (<div className='chat-heading-and-btns-container'>
-            <div className='chatName-chatDp-container'>
-              <div className='chatDp-container'>
-                <img onClick={() => setChatInfoClass('')} className='chatDp' src={selectedChat.chatDp}/>
-              </div>
-              <h3 onClick={() => setChatInfoClass('')} className='chat-box-heading'>{selectedChat.chatName}</h3>
-              { !selectedChat.participants.some(p => p._id === user.id) && (
-                  selectedChat?.subscribers.includes(user.id) ? 
-                  ( <button className='unsubscribe-btn' onClick={handleUnsubscribe}>Unsubscribe</button> ) :
-                  ( <button className='subscribe-btn' onClick={handleSubscribe}>Subscribe</button> )
-              )}
+          <div className='chatName-chatDp-container'>
+            <div className='chatDp-container'>
+              <img onClick={() => setChatInfoClass('')} className='chatDp' src={selectedChat.chatDp} />
             </div>
-            <p className='chat-live-count'><img className='chat-live-count-img' src={eyeIcon}/> {chatLiveCount}</p>
-            <div className='chat-btns-container'>
-              <button className='show-live-chat-btn' onClick={() => setShowLiveChat(prev => !prev)}><MyIcon fill='#c5cad3' style={{height: '15px', width: '15px', color: '#c5cad3'}}/></button>
-              <button className='chat-close-btn' onClick={handleCloseChat}><img className='chat-close-img' src={closeImg}/></button>
-            </div>
-          </div>)
+            <h3 onClick={() => setChatInfoClass('')} className='chat-box-heading'>{selectedChat.chatName}</h3>
+            {!selectedChat.participants.some(p => p._id === user.id) && (
+              selectedChat?.subscribers.includes(user.id) ?
+                (<button className='unsubscribe-btn' onClick={handleUnsubscribe}>Unsubscribe</button>) :
+                (<button className='subscribe-btn' onClick={handleSubscribe}>Subscribe</button>)
+            )}
+          </div>
+          <p className='chat-live-count'><img className='chat-live-count-img' src={eyeIcon} /> {chatLiveCount}</p>
+          <div className='chat-btns-container'>
+            <button className='show-live-chat-btn' onClick={() => { setShowLiveChat(prev => !prev); setNewLiveChatMsg(false) }}>
+              <MyIcon fill='#c5cad3' style={{ height: '18px', width: '18px', color: '#c5cad3' }} />
+              {newLiveChatMsg && <div className='new-indicator'></div>}
+            </button>
+            <button className='chat-close-btn' onClick={handleCloseChat}><img className='chat-close-img' src={closeImg} /></button>
+          </div>
+        </div>)
       }
       <div className='messages-box' ref={messagesBoxRef}>
 
@@ -742,13 +807,16 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
         )}
 
         {[...messages].map((msg, index) => {
+          const id = String(msg._id);
+
+          // ---- your existing newSender logic ----
           if (index === messages.length - 1) {
             newSender = true;
           } else {
             if (String(msg.from._id) !== String(messages[index + 1].from._id)) {
               newSender = true;
             } else {
-              newSender = false
+              newSender = false;
             }
             if (messages[index + 1].type === 'chatInfo') {
               newSender = true;
@@ -758,79 +826,120 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
             }
           }
 
-          
-          
-          return msg.type === 'text' ? (               
-            <TextMessage newSender={newSender} setIsReply={setIsReply} setRepliedTo={setRepliedTo} key={index} msg={msg} sender={msg.from} setMessages={setMessages} selectedChat={selectedChat} setClickedMsg={setClickedMsg}/>      
-          ) : ( msg.type === 'media' && msg.media.length > 0 ) ? (
-            <MediaMessage newSender={newSender} setIsReply={setIsReply} setRepliedTo={setRepliedTo} msg={msg} sender={msg.from} setMessages={setMessages} setClickedMedia={setClickedMedia} selectedChat={selectedChat} setClickedMsg={setClickedMsg}/>
-          ) : msg.type === 'audio' ? (
-            <AudioMessage newSender={newSender} setIsReply={setIsReply} setRepliedTo={setRepliedTo} msg={msg} setMessages={setMessages} sender={msg.from} selectedChat={selectedChat} setClickedMsg={setClickedMsg}/>
-          ) : msg.type === 'chatInfo' && (
-            <ChatInfoMessage msg={msg}/>
-          )
-        })}
-      </div>  
-      { selectedChat && selectedChat.participants.some(p => p._id === user.id) && (
-          <form className='msg-input-form' onSubmit={sendMessage}>
-            {
-              isReply && repliedTo &&
-              (
-                <div className='replyee-msg-container'>
-                  <div className='close-reply-container'>
-                    <button type='button' onClick={() => {setIsReply(false); setRepliedTo(null)}}>
-                      <img src={closeImg}/>
-                    </button>
-                  </div>
-                  <h1 style={{color: `${senderColors[selectedChat.participants.findIndex(p => p._id === repliedTo.from._id)]}`}}>{repliedTo.from.firstName + ' ' + repliedTo.from.lastName}</h1>
-                  <p>
-                    {repliedTo.type === 'text' && repliedTo.message}
-
-                    {repliedTo.type === 'media' &&
-                      `${repliedTo.media?.length || 0} media`}
-
-                    {repliedTo.type === 'audio' && 'Audio Message'}
-                  </p>
-                </div>
-              )
-            }
-            <AttachmentMenu setFiles={setFiles}/>
-            <button type='button' className='emoji-btn' ref={refs.setReference} onMouseDown={(e) => e.preventDefault()} onClick={() => setShowEmoji(v => !v)}><img src={reactImg}/></button>
-
-            {showEmoji && (
-              <div ref={(el) => {
-                refs.setFloating(el);
-                emojiPickerRef.current = el;
-              }} style={floatingStyles}>
-                <EmojiPicker onEmojiClick={onEmojiClick} emojiStyle={EmojiStyle.TWITTER} theme='dark' defaultSkinTone='white'/>
-              </div>
-            )}
-
-            { recording ? (
-              <div className='recording-indicator'>
-                <img src={recordingIcon} className='recording-img'/>  
-                <p>Recording......</p>
-              </div>
-            ) : (
-              <input
-                ref={msgRef}
-                className="msg-input"
-                value={message}
-                onChange={handleInputChange}
-                onClick={saveCaret}
-                onKeyUp={saveCaret}
-                spellCheck='false'
-                placeholder='Enter Message'
+          // ---- your existing component selection ----
+          const content =
+            msg.type === 'text' ? (
+              <TextMessage
+                newSender={newSender}
+                setIsReply={setIsReply}
+                setRepliedTo={setRepliedTo}
+                msg={msg}
+                sender={msg.from}
+                setMessages={setMessages}
+                selectedChat={selectedChat}
+                setClickedMsg={setClickedMsg}
               />
-              )
-            }
-            { !!message ? (
-                <button className='msg-send-btn' onClick={sendMessage}><img className='msg-send-img' src={sendImg}/></button> 
-              ) : (
-                <button className='audio-msg-btn' onClick={handleAudioMessage}><img className='audio-btn-img' src={micImg}/></button>
-              )
-            }
-          </form> )
+            ) : msg.type === 'media' && msg.media.length > 0 ? (
+              <MediaMessage
+                newSender={newSender}
+                setIsReply={setIsReply}
+                setRepliedTo={setRepliedTo}
+                msg={msg}
+                sender={msg.from}
+                setMessages={setMessages}
+                setClickedMedia={setClickedMedia}
+                selectedChat={selectedChat}
+                setClickedMsg={setClickedMsg}
+              />
+            ) : msg.type === 'audio' ? (
+              <AudioMessage
+                newSender={newSender}
+                setIsReply={setIsReply}
+                setRepliedTo={setRepliedTo}
+                msg={msg}
+                setMessages={setMessages}
+                sender={msg.from}
+                selectedChat={selectedChat}
+                setClickedMsg={setClickedMsg}
+              />
+            ) : msg.type === 'chatInfo' ? (
+              <ChatInfoMessage msg={msg} />
+            ) : null;
+
+          // ---- wrapper that stores refs + highlight class ----
+          return (
+            <div
+              key={id}
+              ref={(el) => {
+                if (el) msgRefs.current[id] = el;
+              }}
+              className={focusMessageId && String(focusMessageId) === id ? "focus-msg" : ""}
+            >
+              {content}
+            </div>
+          );
+        })}
+      </div>
+      {selectedChat && selectedChat.participants.some(p => p._id === user.id) && (
+        <form className='msg-input-form' onSubmit={sendMessage}>
+          {
+            isReply && repliedTo &&
+            (
+              <div className='replyee-msg-container'>
+                <div className='close-reply-container'>
+                  <button type='button' onClick={() => { setIsReply(false); setRepliedTo(null) }}>
+                    <img src={closeImg} />
+                  </button>
+                </div>
+                <h1 style={{ color: `${senderColors[selectedChat.participants.findIndex(p => p._id === repliedTo.from._id)]}` }}>{repliedTo.from.firstName + ' ' + repliedTo.from.lastName}</h1>
+                <p>
+                  {repliedTo.type === 'text' && repliedTo.message}
+
+                  {repliedTo.type === 'media' &&
+                    `${repliedTo.media?.length || 0} media`}
+
+                  {repliedTo.type === 'audio' && 'Audio Message'}
+                </p>
+              </div>
+            )
+          }
+          <AttachmentMenu setFiles={setFiles} />
+          <button type='button' className='emoji-btn' ref={refs.setReference} onMouseDown={(e) => e.preventDefault()} onClick={() => setShowEmoji(v => !v)}><img src={reactImg} /></button>
+
+          {showEmoji && (
+            <div ref={(el) => {
+              refs.setFloating(el);
+              emojiPickerRef.current = el;
+            }} style={floatingStyles}>
+              <EmojiPicker onEmojiClick={onEmojiClick} emojiStyle={EmojiStyle.TWITTER} theme='dark' defaultSkinTone='white' />
+            </div>
+          )}
+
+          {recording ? (
+            <div className='recording-indicator'>
+              <img src={recordingIcon} className='recording-img' />
+              <p>Recording......</p>
+            </div>
+          ) : (
+            <input
+              ref={msgRef}
+              className="msg-input"
+              value={message}
+              onChange={handleInputChange}
+              onClick={saveCaret}
+              onKeyUp={saveCaret}
+              spellCheck='false'
+              placeholder='Enter Message'
+            />
+          )
+          }
+          {!!message ? (
+            <button className='msg-send-btn' onClick={sendMessage}><img className='msg-send-img' src={sendImg} /></button>
+          ) : (
+            <button className='audio-msg-btn' onClick={handleAudioMessage}><img className='audio-btn-img' src={recording ? sendImg : micImg} /></button>
+          )
+          }
+        </form>)
       }
     </div>
   )

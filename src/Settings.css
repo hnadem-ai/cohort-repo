@@ -121,6 +121,7 @@
     transition: .2s ease;
     height: 60px;
     width: 110px;
+    cursor: pointer;
 }
 
 .info-edit-btn-container button:hover {
@@ -138,6 +139,7 @@
     place-content: center;
     width: 130px;
     margin-top: 20px;
+    cursor: pointer;
 }
 
 .about{

@@ -8,7 +8,7 @@ import HomeNav from './components/HomeNav';
 import ChatBox from './components/ChatBox';
 import Posts from './components/Posts'
 import LiveChatView from './components/LiveChatCommentsView';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 
 function Home() {
   const paramChatId = useParams().chatId;
@@ -23,8 +23,14 @@ function Home() {
   const [userChats, setUserChats] = useState([]);
   const [isNewMessage, setIsNewMessage] = useState(false);
   const [newMessageChatIds, setNewMessageChatIds] = useState([]);
+  const location = useLocation();
+  const focusMessageId = location.state?.focusMessageId ?? null;
 
   const { markMessagesRead, chatOpened } = useSocket();
+
+  const clearFocus = () => {
+    navigate(location.pathname, { replace: true, state: {} });
+  };
 
   useEffect(() => {
     if(!accessToken && !loading){
@@ -81,7 +87,6 @@ function Home() {
     })
       .then(r => { if (!r.ok) throw new Error('Request failed: ' + r.status); return r.json(); })
       .then(data => {
-        console.log(data.users)
         setUsers(data.users || []);
       })
       .catch(err => {
@@ -99,7 +104,6 @@ function Home() {
     })
       .then(r => { if (!r.ok) throw new Error('Request failed: ' + r.status); return r.json(); })
       .then(data => {
-        console.log(data.chats)
         setUserChats(data.chats || []);
       })
       .catch(err => {
@@ -283,7 +287,7 @@ function Home() {
       {selectedChat ? (
         <div className='chat-box-live-chat-container'>
           <ChatBox
-          setChats={setChats}
+            setChats={setChats}
             paramChatId={paramChatId}
             selectedChat={selectedChat}
             setSelectedChat={setSelectedChat}
@@ -291,6 +295,9 @@ function Home() {
             setMessages={setMessages}
             typingUsers={typingUsers}
             setShowLiveChat={setShowLiveChat}
+            showLiveChat={showLiveChat}
+            focusMessageId={focusMessageId}
+            clearFocus={clearFocus}
           />
           { showLiveChat &&
             <LiveChatView selectedChat={selectedChat} setShowLiveChat={setShowLiveChat}/>

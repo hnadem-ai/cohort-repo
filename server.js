@@ -401,13 +401,25 @@ app.get('/api/refresh', (req, res) => {
 
 app.post('/api/login', async (req, res) => {
     try {
-        console.log(req.body)
-        const user = await User.findOne({
-            email: req.body.email
-        })
+        const user = await User.findOne({ email: req.body.email });
 
         if (!user) {
-            return res.status(404).json({ message: "No user found against this email!" })
+            return res.status(404).json({ message: "No user found against this email!" });
+        }
+
+        // ✅ BLOCK deleted/banned/warned users
+        if (user.status === 'deleted' || user.status === 'banned') {
+            return res.status(403).json({
+                message: user.status === 'deleted'
+                    ? 'This account has been deleted.'
+                    : 'This account is not allowed to login.'
+            });
+        }
+
+        // ✅ password check
+        const isMatch = await bcrypt.compare(req.body.password, user.password_hash);
+        if (!isMatch) {
+            return res.status(401).json({ message: 'Invalid Credentials!' });
         }
 
         const payload = {
@@ -416,33 +428,28 @@ app.post('/api/login', async (req, res) => {
             firstName: user.firstName,
             lastName: user.lastName,
             username: user.username
-        }
+        };
 
         const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_KEY, { expiresIn: "10m" });
         const refreshToken = jwt.sign(payload, process.env.REFRESH_TOKEN_KEY, { expiresIn: "7d" });
 
-        const isMatch = await bcrypt.compare(req.body.password, user.password_hash);
+        res.cookie("refreshToken", refreshToken, {
+            httpOnly: true,
+            secure: false,
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+            path: '/'
+        });
 
-        if (isMatch) {
-            res.cookie("refreshToken", refreshToken, {
-                httpOnly: true,
-                secure: false,
-                sameSite: 'lax',
-                maxAge: 7 * 24 * 60 * 60 * 1000,
-                path: '/'
-            })
-            if (req.headers["x-client"] === "mobile") {
-                return res.status(200).json({ accessToken, refreshToken });
-            }
-
-            return res.status(200).json({ accessToken });
-
-        } else {
-            res.status(401).json({ message: 'Invalid Credentials!' })
+        if (req.headers["x-client"] === "mobile") {
+            return res.status(200).json({ accessToken, refreshToken });
         }
+
+        return res.status(200).json({ accessToken });
+
     } catch (err) {
         console.log(err);
-        res.status(500).json({ message: 'Server Error!' })
+        return res.status(500).json({ message: 'Server Error!' });
     }
 });
 
@@ -669,7 +676,7 @@ app.post('/api/verify-code', async (req, res) => {
     }
 });
 
-app.get('/api/check-username', async (req, res) => {
+app.get('/api/check-username', authTokenAPI,  async (req, res) => {
   try {
     const usernameRaw = (req.query.username || '').trim();
 
@@ -1164,7 +1171,7 @@ app.get('/api/users', authTokenAPI, async (req, res) => {
             return res.status(400).json({ message: 'Invalid user ID' });
         }
 
-        const filter = { _id: { $ne: req.user.id } };
+        const filter = { _id: { $ne: req.user.id }, $or: [{status: 'active'}, {status: 'warned'}] };
 
         // Search by name if query exists
         if (query) {
@@ -1872,37 +1879,99 @@ app.patch('/api/user/dob', authTokenAPI, async (req,res) => {
     }
 })
 
-app.delete('/api/user', authTokenAPI, async (req, res) => {
+app.delete("/api/user", authTokenAPI, async (req, res) => {
+    const session = await mongoose.startSession();
+
     try {
         const userId = new mongoose.Types.ObjectId(req.user.id);
-        if(!userId){
-            return res.status(403).json({message: 'Invalid User ID!'})
-        }
 
-        const user = await User.findByIdAndDelete(userId);
+        await session.withTransaction(async () => {
 
-        if (!user) {
-            return res.status(404).json({
-                message: 'User not found',
-            });
-        }
+            // 1️⃣ Find user
+            const user = await User.findById(userId).session(session);
+            if (!user) {
+                const err = new Error("User not found");
+                err.statusCode = 404;
+                throw err;
+            }
 
-        // Clear refresh token cookie
-        res.clearCookie('refreshToken', {
+            // 2️⃣ Soft delete user
+            user.status = "deleted";
+            user.username = `Cohortbox_User_${user._id.toString().slice(-5)}`;
+            user.firstName = 'Cohortbox';
+            user.lastName = 'User'
+            user.dp = "https://media.cohortbox.com/user-dp/profile-user.png";
+            user.chat_requests = [];
+            user.friends = [];
+            await user.save({ session });
+
+            // 3️⃣ Delete notifications
+            await Notification.deleteMany({ user: userId }).session(session);
+
+            // 4️⃣ Delete friend requests
+            await FriendRequest.deleteMany({
+                $or: [{ from: userId }, { to: userId }]
+            }).session(session);
+
+            // 5️⃣ Handle chats where user is ADMIN
+            const adminChats = await Chat.find({ chatAdmin: userId }).session(session);
+
+            for (const chat of adminChats) {
+
+                // Remove admin from participants list
+                const remainingParticipants = chat.participants
+                    .map(p => String(p))
+                    .filter(p => p !== String(userId));
+
+                if (remainingParticipants.length === 0) {
+                    // No participants left → delete chat
+                    await Chat.deleteOne({ _id: chat._id }).session(session);
+                } else {
+                    // Promote first remaining participant
+                    chat.chatAdmin = remainingParticipants[0];
+                    chat.participants = remainingParticipants;
+                    await chat.save({ session });
+                }
+            }
+
+            // 6️⃣ Remove user from chats where not admin
+            await Chat.updateMany(
+                { participants: userId },
+                { $pull: { participants: userId } },
+                { session }
+            );
+
+            await Chat.updateMany(
+                { requested_participants: userId },
+                { $pull: { requested_participants: userId } },
+                { session }
+            );
+
+            await Chat.updateMany(
+                { subscribers: userId },
+                { $pull: { subscribers: userId } },
+                { session }
+            );
+
+        });
+
+        res.clearCookie("refreshToken", {
             httpOnly: true,
-            sameSite: 'lax',
-            secure: false, // set true in production HTTPS
+            sameSite: "lax",
+            secure: false, // true in prod HTTPS
         });
 
         return res.status(200).json({
-            message: 'Account deleted successfully',
+            message: "Account deleted successfully"
         });
 
     } catch (err) {
         console.error(err);
-        return res.status(500).json({
-            message: 'Server Error',
+        return res.status(err.statusCode || 500).json({
+            message: err.message || "Server Error"
         });
+    } finally {
+        session.endSession();
     }
 });
 
@@ -2846,7 +2915,31 @@ app.get('/api/media/:chatId', authTokenAPI, async (req, res) => {
       return res.status(404).json({ message: "No media found for this chat!" });
     }
 
-    return res.status(200).json({ media: mediaMessages });
+    const result = await Message.aggregate([
+      {
+        $match: {
+          chatId: new mongoose.Types.ObjectId(chatId),
+        },
+      },
+
+      // explode media array
+      { $unwind: "$media" },
+
+      // keep only image + video
+      {
+        $match: {
+          "media.type": { $in: ["image", "video"] },
+        },
+      },
+
+      {
+        $count: "totalMedia",
+      },
+    ]);
+
+    const total = result.length > 0 ? result[0].totalMedia : 0;
+
+    return res.status(200).json({ media: mediaMessages, total });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Server error", details: err.message });

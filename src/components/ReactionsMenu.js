@@ -2,7 +2,7 @@ import "./ReactionsMenu.css";
 import { useEffect, useMemo, useState } from "react";
 import { useFloating, offset, flip, shift } from "@floating-ui/react";
 
-export default function ReactionsPopup({ reactions = [], selectedChat }) {
+export default function ReactionsPopup({ reactions = [], selectedChat, isCimv = false }) {
     const [open, setOpen] = useState(false);
 
     const { refs, floatingStyles } = useFloating({
@@ -88,7 +88,7 @@ export default function ReactionsPopup({ reactions = [], selectedChat }) {
                 className="reactions-trigger"
                 onClick={() => setOpen(prev => !prev)}
             >
-                <span className="reaction-bubble">
+                <span className={isCimv ? "reaction-bubble is-cimv" : 'reaction-bubble'}>
                     {allTopEmojis.slice(0,2).map(e => <span key={e.emoji}>{e.emoji}</span>)}
                     <span className="reaction-count">{totalCount}</span>
                 </span>

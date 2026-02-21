@@ -92,6 +92,7 @@
     padding: 0 7px;
     min-width: fit-content;
     position: relative;
+    cursor: pointer;
 }
 
 .active-filter-btn{

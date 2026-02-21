@@ -1,6 +1,6 @@
 import "./Post.css";
 import { useMemo, useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import left from "../images/left-arrow.png";
 import right from "../images/right-arrow.png";
 import VideoPlayer from "./VideoPlayer";
@@ -37,7 +37,9 @@ function Post({ post }) {
   const [postState, setPostState] = useState(post);
 
   const [open, setOpen] = useState(false);
-  const [showReport, setShowReport] = useState(false)
+  const [showReport, setShowReport] = useState(false);
+
+  const navigate = useNavigate();
 
   const { refs, floatingStyles } = useFloating({
     placement: "bottom-start",
@@ -105,10 +107,21 @@ function Post({ post }) {
     });
   }
 
-    const summary = useMemo(
-        () => getReactionSummary(postState?.reactions, 2),
-        [postState?.reactions]
-    );
+  function handleShare() {
+    const chatId = postState?.chatId?._id ?? postState?.chatId; // safe
+    if (!chatId || !postState?._id) return;
+
+    navigate(`/${chatId}`, {
+      state: {
+        focusMessageId: String(postState._id),
+      },
+    });
+  }
+
+  const summary = useMemo(
+    () => getReactionSummary(postState?.reactions, 2),
+    [postState?.reactions]
+  );
 
   return (
     <div className="post-container">
@@ -221,8 +234,8 @@ function Post({ post }) {
           <ReactionMenu msg={msg} isPost={true} onReactLocal={onReactLocal} />
         </div>
 
-        <button className="post-btn" type="button">
-          Share
+        <button className="post-btn" type="button" onClick={handleShare}>
+          Go to Message
         </button>
       </div>
       { showReport && <ReportMenu targetId={msg._id} targetModel={'Message'} setSelfState={setShowReport}/>}

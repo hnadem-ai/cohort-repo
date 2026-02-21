@@ -112,15 +112,25 @@
     height: 90px;
     display: flex;
     align-items: center;
-    justify-content: center;
     gap: 10px;
     width: 100%;
-    overflow-y: auto;
+    overflow-x: auto;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--small) var(--black);
+}
+
+.chat-media-item-container{
+    height: 70px;
+    width: 70px;
+    display: flex;
+    overflow: hidden;
+    min-width: 70px;
 }
 
 .chat-media-item{
-    height: 70px;
-    width: 70px;
+    height: 100%;
     object-fit: cover;
 }
 

@@ -1,13 +1,45 @@
 import './ChatInfoMediaView.css';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import closeImg from '../images/close-gray.png';
 import right from '../images/right-arrow.png';
 import left from '../images/left-arrow.png';
 import AudioPlayer from './AudioPlayer';
+import ReactionsMenu from './ReactionsMenu';
 
-export default function ChatInfoMediaView({items, index, setShowMediaView}){
+export default function ChatInfoMediaView({items, index, setShowMediaView, fetchMoreMedia, hasMoreMedia, mediaLoading, selectedChat}){
     const safeInitialIndex = Math.min(Math.max(index, 0), items.length - 1);
     const [mainIndex, setMainIndex] = useState(safeInitialIndex);
+
+    const fetchingRef = useRef(false);         // prevents parallel calls
+    const lastTriggeredLenRef = useRef(0); 
+
+    useEffect(() => {
+        if (!fetchMoreMedia) return;
+        if (!items || items.length === 0) return;
+
+        // ✅ stop trying if backend says no more
+        if (!hasMoreMedia) return;
+
+        // ✅ if currently loading, don't queue again
+        if (mediaLoading) return;
+
+        const THRESHOLD = 5;
+        const remaining = (items.length - 1) - mainIndex;
+
+        if (remaining > THRESHOLD) return;
+
+        if (lastTriggeredLenRef.current === items.length) return;
+        if (fetchingRef.current) return;
+
+        fetchingRef.current = true;
+        lastTriggeredLenRef.current = items.length;
+
+        Promise.resolve(fetchMoreMedia())
+            .catch(() => { })
+            .finally(() => {
+                fetchingRef.current = false;
+            });
+    }, [mainIndex, items.length, fetchMoreMedia, hasMoreMedia, mediaLoading]);
 
     // Keep in sync when parent changes the selected index
     useEffect(() => {
@@ -61,6 +93,7 @@ export default function ChatInfoMediaView({items, index, setShowMediaView}){
                         <h1>{items[mainIndex]?.from?.firstName + ' ' + items[mainIndex]?.from?.lastName}</h1>
                         <p>{items[mainIndex]?.timestamp}</p>
                     </div>
+                    { items[mainIndex]?.reactions.length > 0 && <ReactionsMenu reactions={items[mainIndex]?.reactions} selectedChat={selectedChat} isCimv={true} />}
                 </div>
                 <div className='chat-media-btns'>
                     <button onClick={(e) => setShowMediaView(false)}><img src={closeImg}/></button>
@@ -82,9 +115,13 @@ export default function ChatInfoMediaView({items, index, setShowMediaView}){
                 {
                     items.map((item, index) => {
                         return item.type === 'image' ? (
-                            <img key={index} src={item.url} className='chat-media-item' onClick={() => setMainIndex(index)} />
+                            <div className='chat-media-item-container'>
+                                <img key={index} src={item.url} className='chat-media-item' onClick={() => setMainIndex(index)} />
+                            </div>
                         ) : (
-                            <video key={index} src={item.url} className='chat-media-item' onClick={() => setMainIndex(index)} />
+                            <div className='chat-media-item-container'>
+                                <video key={index} src={item.url} className='chat-media-item' onClick={() => setMainIndex(index)} />
+                            </div>
                         )
                     })
                 }

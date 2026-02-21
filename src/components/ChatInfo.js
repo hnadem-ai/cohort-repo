@@ -18,12 +18,20 @@ function ChatInfo({
   setMessages
 }) {
   const navigate = useNavigate();
+
+  const PREVIEW_COUNT = 6;
+
+  const openMediaViewer = (index = 0) => {
+    setShowMediaView(true);
+    setActiveMediaIndex(index);
+  };
+
   const { user, accessToken } = useAuth();
   const { socket } = useSocket();
 
   const [searchBarClass, setSearchBarClass] = useState(' hidden');
   const [members, setMembers] = useState([]);
-  const [showMedia, setShowMedia] = useState(false);
+  const [totalMedia, setTotalMedia] = useState(null);
 
   // Raw messages returned by /api/media/:chatId
   const [mediaMsgs, setMediaMsgs] = useState([]);
@@ -45,6 +53,25 @@ function ChatInfo({
   const mediaLoadingRef = useRef(false);
   const hasMoreMediaRef = useRef(true);
 
+
+  const mediaItems = useMemo(() => {
+    return (mediaMsgs || []).flatMap((msg) =>
+      (msg.media || []).map((m, idx) => ({
+        key: `${msg._id}-${idx}`,
+        url: m.url,
+        type: m.type,
+        messageId: msg._id,
+        from: msg.from,
+        timestamp: msg.timestamp,
+        reactions: msg.reactions ? msg.reactions : []
+      }))
+    );
+  }, [mediaMsgs]);
+
+  const previewItems = useMemo(() => {
+    return mediaItems.slice(0, Math.max(PREVIEW_COUNT - 1, 0));
+  }, [mediaItems]);
+
   // Keep refs in sync with state (refs do not cause rerender)
   useEffect(() => {
     mediaLoadingRef.current = mediaLoading;
@@ -57,7 +84,6 @@ function ChatInfo({
   // When chat changes, reset everything related to media
   useEffect(() => {
     didFirstLoadRef.current = false;
-    setShowMedia(false); // optional: close panel when chat changes
     setMediaMsgs([]);
     setHasMoreMedia(true);
     setMediaLoading(false);
@@ -68,7 +94,6 @@ function ChatInfo({
   const fetchMoreMedia = useCallback(
     async ({ reset = false } = {}) => {
       if (!user || !accessToken || !selectedChat?._id) return;
-      if (!showMedia) return;
 
       // Hard gates
       if (mediaLoadingRef.current) return;
@@ -99,7 +124,7 @@ function ChatInfo({
 
         const data = await res.json();
         const newMsgs = data?.media || [];
-
+        setTotalMedia(data.total);
         if (newMsgs.length === 0) {
           setHasMoreMedia(false);
           return;
@@ -122,12 +147,11 @@ function ChatInfo({
     // Intentionally keep deps minimal to avoid recreating callback unnecessarily.
     // We rely on refs for loading/hasMore gates, and we only use mediaMsgs.length for lastId.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [user, accessToken, selectedChat?._id, showMedia, mediaMsgs.length]
+    [user, accessToken, selectedChat?._id, mediaMsgs.length]
   );
 
   // First load only once per "open media panel" session
   useEffect(() => {
-    if (!showMedia) return;
     if (!user || !accessToken || !selectedChat?._id) return;
 
     if (didFirstLoadRef.current) return;
@@ -137,15 +161,9 @@ function ChatInfo({
     hasMoreMediaRef.current = true;
 
     fetchMoreMedia({ reset: true });
-  }, [showMedia, user, accessToken, selectedChat?._id, fetchMoreMedia]);
+  }, [user, accessToken, selectedChat?._id, fetchMoreMedia]);
 
-  // IntersectionObserver: load more only when:
-  // - panel open
-  // - not loading
-  // - has more
-  // - container can scroll (prevents "sentinel always visible -> endless fetching")
   useEffect(() => {
-    if (!showMedia) return;
     if (!mediaContainerRef.current) return;
     if (!loadMoreMediaRef.current) return;
 
@@ -172,78 +190,9 @@ function ChatInfo({
 
     observer.observe(loadMoreMediaRef.current);
     return () => observer.disconnect();
-  }, [showMedia, fetchMoreMedia]);
+  }, [fetchMoreMedia]);
 
-  // Build mediaItems from mediaMsgs
-  const mediaItems = useMemo(() => {
-    return (mediaMsgs || []).flatMap((msg) =>
-      (msg.media || []).map((m, idx) => ({
-        key: `${msg._id}-${idx}`,
-        url: m.url,
-        type: m.type,
-        messageId: msg._id,
-        from: msg.from,
-        timestamp: msg.timestamp
-      }))
-    );
-  }, [mediaMsgs]);
-
-  function renderChatMediaGrid(items = []) {
-    if (items.length === 0) return <p>No media to show!</p>;
-
-    return items.map((item, index) => {
-      if (item.type === 'image') {
-        return (
-          <div
-            key={item.key}
-            className="chat-info-media"
-            onClick={() => {
-              setShowMediaView(true);
-              setActiveMediaIndex(index);
-            }}
-          >
-            <img className="chat-info-media-img" src={item.url} alt="chat media" loading="lazy" />
-          </div>
-        );
-      }
-
-      if (item.type === 'video') {
-        return (
-          <div
-            key={item.key}
-            className="chat-info-media"
-            onClick={() => {
-              setShowMediaView(true);
-              setActiveMediaIndex(index);
-            }}
-          >
-            <video className="chat-info-media-video" src={item.url} preload="metadata" />
-          </div>
-        );
-      }
-
-      if (item.type === 'audio') {
-        return (
-          <div
-            key={item.key}
-            className="chat-info-media"
-            onClick={() => {
-              setShowMediaView(true);
-              setActiveMediaIndex(index);
-            }}
-          >
-            <audio className="chat-info-media-audio" src={item.url} preload="metadata" />
-          </div>
-        );
-      }
-
-      return (
-        <div key={item.key} className="chat-info-media">
-          <p>Unsupported media</p>
-        </div>
-      );
-    });
-  }
+  // Build mediaItems from mediaMsg
 
   function handleRemove(e, userId, chatId) {
     e.preventDefault();
@@ -296,15 +245,13 @@ function ChatInfo({
 
   if (!selectedChat) return null;
 
-  console.log(selectedChat.participants)
-
   return (
     <div className={'chat-info-background-container' + chatInfoClass} ref={mediaContainerRef}>
       <div className={'chat-info-container' + chatInfoClass}>
         <div className="chat-info-heading">
           <div className="chat-img-container">
             <img className="chat-img" src={selectedChat.chatDp} alt="" />
-            { String(user.id) === String(selectedChat.chatAdmin) &&
+            {String(user.id) === String(selectedChat.chatAdmin) &&
               <div className="photo-change-btn">
                 <img
                   className="photo-change-img"
@@ -318,24 +265,48 @@ function ChatInfo({
           <h4 className="chatname">{selectedChat.chatName}</h4>
         </div>
 
-        <button className="media-toggle-btn" onClick={() => setShowMedia((prev) => !prev)}>
+        <button className="media-toggle-btn">
           <p>See CohortBox Media</p>
-          <p>{mediaItems.length}</p>
+          <p>{totalMedia}</p>
         </button>
+        
+        <div className="chat-info-media-container">
+          {previewItems.length === 0 ? (
+            <p style={{ opacity: 0.7, padding: "6px 0" }}>No media yet</p>
+          ) : (
+            <>
+              {previewItems.map((item, index) => (
+                <div
+                  key={item.key}
+                  className="chat-info-media"
+                  onClick={() => openMediaViewer(index)}
+                >
+                  {item.type === "image" ? (
+                    <img src={item.url} alt="" loading="lazy" />
+                  ) : item.type === "video" ? (
+                    <video src={item.url} preload="metadata" />
+                  ) : (
+                    <div className="media-preview-unsupported">File</div>
+                  )}
+                </div>
+              ))}
 
-        {showMedia && (
-          <div className="chat-info-media-container">
-            {renderChatMediaGrid(mediaItems)}
+              {/* last tile = See more */}
+              <button
+                type="button"
+                className="media-preview-more"
+                onClick={() => openMediaViewer(0)}
+              >
+                <span>See more</span>
+                <span className="media-preview-more-count">
+                  {Math.max((totalMedia ?? mediaItems.length) - previewItems.length, 0)}+
+                </span>
+              </button>
+            </>
+          )}
 
-            {mediaLoading && <p style={{ padding: 8, opacity: 0.8 }}>Loading more...</p>}
-
-            {!mediaLoading && !hasMoreMedia && mediaItems.length > 0 && (
-              <p style={{ padding: 8, opacity: 0.6 }}>No more media</p>
-            )}
-
-            <div ref={loadMoreMediaRef} style={{ height: 1 }} />
-          </div>
-        )}
+          <div ref={loadMoreMediaRef} style={{ height: 1 }} />
+        </div>
 
         <div className="participants-heading-container">
           <h3 className={'participants-heading' + chatInfoClass}>Participants: </h3>
@@ -348,11 +319,11 @@ function ChatInfo({
 
         <div className={'participant-names-container' + chatInfoClass}>
           {selectedChat.participants.map((participant, index) => (
-            <Link to={`/profile/${participant._id}`} style={{textDecoration: 'none', color: '#c5cad3'}}>
+            <Link to={`/profile/${participant._id}`} style={{ textDecoration: 'none', color: '#c5cad3' }}>
               <div key={index} className="chat-info-participant-container">
                 <div className='chat-info-participant-dp-container'>
                   <div className='participant-img-container'>
-                    <img src={participant.dp}/>
+                    <img src={participant.dp} />
                   </div>
                   <div className="chat-info-participant-name-container">
                     <p className={'participant-name' + chatInfoClass}>
@@ -392,6 +363,10 @@ function ChatInfo({
           items={mediaItems}
           index={Math.min(activeMediaIndex, mediaItems.length - 1)}
           setShowMediaView={setShowMediaView}
+          fetchMoreMedia={fetchMoreMedia}
+          hasMoreMedia={hasMoreMedia}
+          mediaLoading={mediaLoading}
+          selectedChat={selectedChat}
         />
       )}
 

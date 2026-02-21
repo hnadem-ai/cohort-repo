@@ -36,7 +36,6 @@ function NavBar({ selectedChat }){
             }
             return res.json();
         }).then(data => {
-            console.log(data)
             setNotifications(data.notifications);
             setIsNewNotification(false);
         }).catch(err => {

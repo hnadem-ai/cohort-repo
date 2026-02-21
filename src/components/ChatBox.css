@@ -103,6 +103,8 @@
   border: none;
   display: grid;
   place-content: center;
+  cursor: pointer;
+  position: relative;
 }
 
 .show-live-chat-btn:hover{
@@ -138,6 +140,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
 }
 
 .chat-close-btn:hover{
@@ -185,16 +188,16 @@
   left: 50%;
   transform: translateX(-50%);
   bottom: 90px;
-  padding: 5px;
+  padding: 7px 17px;
 
-  background: var(--fontColor);
+  background: var(--black);
   border: 1px solid var(--borderColor);
   border-radius: 50px;
 
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 5px;
 
   cursor: pointer;
   z-index: 9999;
@@ -221,13 +224,13 @@
 
 /* Arrow image */
 .new-msg-pill img {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
 }
 
 .new-msg-pill p{
-  color: var(----fontColor);
-  font-size: 12px;
+  color: var(--fontColor);
+  font-size: 13px;
   font-family: 'GR';
 }
 
@@ -411,6 +414,17 @@
   font-size: 0.7rem;
 }
 
+.focus-msg {
+  animation: focusFlash 1.2s ease-in-out 0s 2;
+  border-radius: 10px;
+}
+
+@keyframes focusFlash {
+  0% { background: rgba(255,255,255,0.0); }
+  50% { background: rgba(255,255,255,0.08); }
+  100% { background: rgba(255,255,255,0.0); }
+}
+
 .other-msg {
   position: relative;
   text-align: left;
@@ -497,6 +511,7 @@
       'Emoji';
   color: var(--fontColor);
   width: 100%;
+  letter-spacing: 0.6px;
 }
 
 .my-media-msg{

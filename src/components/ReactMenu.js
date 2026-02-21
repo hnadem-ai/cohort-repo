@@ -18,7 +18,6 @@ function getMyReaction(message, userId) {
 }
 
 function ReactionMenu({ msg, isPost = false, onReactLocal }) {
-  console.log(msg)
   const { socket } = useSocket();
   const { user, accessToken } = useAuth();
   const [open, setOpen] = useState(false);

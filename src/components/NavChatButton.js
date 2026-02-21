@@ -2,10 +2,13 @@ import './NavChatButton.css';
 import eyeImg from '../images/viewer-icon.png';
 import {ReactComponent as NewMessageIcon} from '../images/new-message-icon.svg';
 import {useMemo} from 'react'
+import { useNavigate } from 'react-router-dom';
 
 function NavChatButton({ chat, selectedChat, setSelectedChat, newMessageChatIds = [], setNewMessageChatIds = (prev)=>{return} }){
 
     // ---------- nav-chat-button === ncbs ----------
+
+    const navigate = useNavigate();
 
     const isNewMessageChat = useMemo(() => {
         return newMessageChatIds.some(id => String(id) === String(chat._id));
@@ -14,6 +17,7 @@ function NavChatButton({ chat, selectedChat, setSelectedChat, newMessageChatIds 
 
     function handleClick(e) {
         setSelectedChat(chat);
+        navigate(`/${chat._id}`, { replace: true });
         setNewMessageChatIds(prev =>
             prev.filter(id => String(id) !== String(chat._id))
         );

@@ -71,3 +71,8 @@
   font-size: 12px;
   opacity: 0.8;
 }
+
+.is-cimv{
+  font-size: 1.2rem;
+  gap: 5px;
+}
