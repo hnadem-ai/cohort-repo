@@ -181,6 +181,8 @@
   scrollbar-width: thin;
   -webkit-scrollbar-color: var(--small) var(--chatBoxBg);
   -webkit-scrollbar-width: thin;
+  /* background: url('../images/chat-box-bg.png') no-repeat center fixed;
+  background-size: cover; */
 }
 
 .new-msg-pill {
@@ -512,6 +514,7 @@
   color: var(--fontColor);
   width: 100%;
   letter-spacing: 0.6px;
+  word-spacing: -1.25px;
 }
 
 .my-media-msg{

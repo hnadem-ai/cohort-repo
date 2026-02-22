@@ -14,32 +14,33 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 require('dotenv').config();
+const { sendVerificationEmail } = require("./services/emailService");
 const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
 //const { upload, uploadUserDp, uploadChatDp } = require('./config/CloudinaryConfig.js');
 const mime = require('mime-types')
 const path = require('path');
 const multer = require('multer');
-const {uploadBufferToR2} = require('./config/r2.js');
+const { uploadBufferToR2 } = require('./config/r2.js');
 const { default: mongoose } = require('mongoose');
 const saltRounds = 10;
 
 const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
-  fileFilter: (req, file, cb) => {
-    if (!file.mimetype?.startsWith("image/")) return cb(new Error("Only images allowed"));
-    cb(null, true);
-  },
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
+    fileFilter: (req, file, cb) => {
+        if (!file.mimetype?.startsWith("image/")) return cb(new Error("Only images allowed"));
+        cb(null, true);
+    },
 });
 
 const uploadAudio = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 30 * 1024 * 1024 }, // example: 30MB (tune this)
-  fileFilter: (req, file, cb) => {
-    if (!file.mimetype?.startsWith("audio/")) return cb(new Error("Only audio allowed"));
-    cb(null, true);
-  },
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 30 * 1024 * 1024 }, // example: 30MB (tune this)
+    fileFilter: (req, file, cb) => {
+        if (!file.mimetype?.startsWith("audio/")) return cb(new Error("Only audio allowed"));
+        cb(null, true);
+    },
 });
 
 
@@ -47,25 +48,25 @@ let onlineUsers = {};
 const liveViewers = new Map();
 
 function trackViewer(chatId, userId) {
-  if (!liveViewers.has(chatId)) {
-    liveViewers.set(chatId, new Set());
-  }
+    if (!liveViewers.has(chatId)) {
+        liveViewers.set(chatId, new Set());
+    }
 
-  liveViewers.get(chatId).add(userId);
+    liveViewers.get(chatId).add(userId);
 }
 
 function untrackViewer(chatId, userId) {
-  if (!chatId || !userId) return;
+    if (!chatId || !userId) return;
 
-  const viewers = liveViewers.get(chatId);
-  if (!viewers) return;
+    const viewers = liveViewers.get(chatId);
+    if (!viewers) return;
 
-  viewers.delete(userId);
+    viewers.delete(userId);
 
-  // cleanup empty rooms to prevent memory leaks
-  if (viewers.size === 0) {
-    liveViewers.delete(chatId);
-  }
+    // cleanup empty rooms to prevent memory leaks
+    if (viewers.size === 0) {
+        liveViewers.delete(chatId);
+    }
 }
 
 function emitViewerCount(chatId) {
@@ -247,8 +248,9 @@ app.get(/^(?!\/api|\/socket\.io).*/, (req, res) => {
     res.sendFile(path.join(buildPath, 'index.html'));
 });
 
-app.post('/api/signup', async (req, res) => {
-    console.log(req.body)
+app.post("/api/signup", async (req, res) => { 
+    console.log(req.body);
+
     try {
         const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -264,41 +266,34 @@ app.post('/api/signup', async (req, res) => {
 
         const userDB = await User.create(user);
 
-        const transporter = nodemailer.createTransport({
-            host: process.env.EMAIL_HOST,   // confirm in your dashboard
-            port: process.env.EMAIL_PORT,
-            secure: process.env.EMAIL_SECURE,              // TLS
-            auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASS
-            },
-            requireTLS: true
+        await Notification.create({
+            user: userDB._id,
+            sender: process.env.COHORT_ROOT_USER_ID,
+            type: "welcome",
+            chat: null,
+            message: null,
+            text: "",
+            isRead: false,
         });
 
-        const mailOptions = {
-            from: '"Cohort-Box" <no-reply@cohortbox.com>',
-            to: user.email,
-            subject: 'Your CohortBox Verification Code',
-            html: `
-                <h3>Welcome to Cohort-Box!</h3>
-                <p>Your verification code is:</p>
+        // ✅ email logic moved to service (same behavior)
+        const emailRes = await sendVerificationEmail({
+            toEmail: user.email,
+            toName: `${user.firstName || ""} ${user.lastName || ""}`.trim(),
+            code: verificationCode,
+        });
 
-                <h2 style="font-size: 32px; letter-spacing: 4px;">${verificationCode}</h2>
-
-                <p>This code expires in 1 hour.</p>
-                <p>If you didn't request this, just ignore this email.</p>
-            `,
-        };
-
-        await transporter.sendMail(mailOptions);
+        if(!emailRes.ok){
+            throw new Error(emailRes);
+        }
 
         const payload = {
             id: userDB._id,
             email: user.email,
             firstName: user.firstName,
             lastName: user.lastName,
-            username: user.username
-        }
+            username: user.username,
+        };
 
         const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_KEY, { expiresIn: "10m" });
         const refreshToken = jwt.sign(payload, process.env.REFRESH_TOKEN_KEY, { expiresIn: "7d" });
@@ -306,19 +301,21 @@ app.post('/api/signup', async (req, res) => {
         res.cookie("refreshToken", refreshToken, {
             httpOnly: true,
             secure: false,
-            sameSite: 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000
-        })
-        res.status(201).json({ accessToken });
-    } catch (err) {
-        console.log(err)
-        if (err.code === 11000) {
-            return res.status(400).json({ message: 'Email already exists' });
-        }
-        return res.status(500).json({ message: 'Server error' });
-    }
+            sameSite: "lax",
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
 
-})
+        return res.status(201).json({ accessToken });
+    } catch (err) {
+        console.log(err);
+
+        if (err.code === 11000) {
+            return res.status(400).json({ message: "Email already exists" });
+        }
+
+        return res.status(500).json({ message: "Server error" });
+    }
+});
 
 app.post('/api/update-verification-token', async (req, res) => {
     try {
@@ -507,11 +504,11 @@ app.get('/api/admin/auth/me', async (req, res) => {
 app.get('/api/admin/reports', adminAuthAPI, async (req, res) => {
     try {
         // req.admin is already set by middleware
-        const reports = await Report.find({status: 'pending'})
+        const reports = await Report.find({ status: 'pending' })
             .populate('from', 'email username firstName lastName')   // reporter email
             .populate({
                 path: 'target',
-                populate: [ 
+                populate: [
                     {
                         path: 'from',
                         select: 'email username firstName lastName dp',
@@ -543,18 +540,18 @@ app.get('/api/admin/reports', adminAuthAPI, async (req, res) => {
 });
 
 app.post('/api/admin/report/action/:reportId/:action', adminAuthAPI, async (req, res) => {
-    try{
+    try {
         const action = req.params.action;
-        if(action !== 'del' && action !== 'warn' && action !== 'dismiss'){
-            return res.status(400).json({message: 'Invalid Action!'});
+        if (action !== 'del' && action !== 'warn' && action !== 'dismiss') {
+            return res.status(400).json({ message: 'Invalid Action!' });
         }
         const reportId = req.params.reportId;
         if (!mongoose.Types.ObjectId.isValid(reportId)) {
             return res.status(400).json({ success: false, message: 'Invalid report ID' });
         }
         const report = await Report.findById(reportId);
-        if (!report){
-            return res.status(404).json({success: false, message: "Report not found 404!"})
+        if (!report) {
+            return res.status(404).json({ success: false, message: "Report not found 404!" })
         }
         if (report.targetModel !== 'Message' && report.targetModel !== 'User') {
             return res.status(400).json({
@@ -568,40 +565,17 @@ app.post('/api/admin/report/action/:reportId/:action', adminAuthAPI, async (req,
                 message: 'Report already resolved'
             });
         }
-        if(action === 'del'){
-            if(report.targetModel === 'User') {
-                const bannedUser = await User.updateOne({_id: report.target}, {status: 'banned'});
-                if(bannedUser.matchedCount === 0){
-                    return res.status(404).json({success: false, message: "User Wasn't banned!"})
+        if (action === 'del') {
+            if (report.targetModel === 'User') {
+                const bannedUser = await User.updateOne({ _id: report.target }, { status: 'banned' });
+                if (bannedUser.matchedCount === 0) {
+                    return res.status(404).json({ success: false, message: "User Wasn't banned!" })
                 }
             }
-            if(report.targetModel === 'Message') {
-                const deletedMessage = await Message.deleteOne({_id: report.target});
-                if(deletedMessage.deletedCount === 0){
-                    return res.status(404).json({success: false, message: "Message Wasn't deleted!"})
-                }
-            }
-            report.resolved = true;
-            report.status = 'actioned';
-            await report.save();
-            return res.status(200).json({success: true});
-        }
-        if(action === 'warn'){
-            if(report.targetModel === 'User') {
-                const bannedUser = await User.updateOne({_id: report.target}, {status: 'warned'});
-                if(bannedUser.matchedCount === 0){
-                    return res.status(404).json({success: false, message: "User Wasn't banned!"})
-                }
-            }
-
-            if(report.targetModel === 'Message') {
-                const reportedMessage = await Message.findById(report.target);
-                if(!reportedMessage){
-                    return res.status(404).json({success: false, message: "Reported Message Could not be found"})
-                }
-                const reportedUser = await User.updateOne({_id: reportedMessage.from}, {status: 'warned'});
-                if(reportedUser.matchedCount === 0){
-                    return res.status(404).json({success: false, message: "User Wasn't warned"});
+            if (report.targetModel === 'Message') {
+                const deletedMessage = await Message.deleteOne({ _id: report.target });
+                if (deletedMessage.deletedCount === 0) {
+                    return res.status(404).json({ success: false, message: "Message Wasn't deleted!" })
                 }
             }
             report.resolved = true;
@@ -609,7 +583,30 @@ app.post('/api/admin/report/action/:reportId/:action', adminAuthAPI, async (req,
             await report.save();
             return res.status(200).json({ success: true });
         }
-        if(action === 'dismiss'){
+        if (action === 'warn') {
+            if (report.targetModel === 'User') {
+                const bannedUser = await User.updateOne({ _id: report.target }, { status: 'warned' });
+                if (bannedUser.matchedCount === 0) {
+                    return res.status(404).json({ success: false, message: "User Wasn't banned!" })
+                }
+            }
+
+            if (report.targetModel === 'Message') {
+                const reportedMessage = await Message.findById(report.target);
+                if (!reportedMessage) {
+                    return res.status(404).json({ success: false, message: "Reported Message Could not be found" })
+                }
+                const reportedUser = await User.updateOne({ _id: reportedMessage.from }, { status: 'warned' });
+                if (reportedUser.matchedCount === 0) {
+                    return res.status(404).json({ success: false, message: "User Wasn't warned" });
+                }
+            }
+            report.resolved = true;
+            report.status = 'actioned';
+            await report.save();
+            return res.status(200).json({ success: true });
+        }
+        if (action === 'dismiss') {
             report.resolved = true;
             report.status = 'dismissed';
             await report.save();
@@ -621,7 +618,7 @@ app.post('/api/admin/report/action/:reportId/:action', adminAuthAPI, async (req,
     }
 });
 
-app.post('/api/logout', authTokenAPI,(req, res) => {
+app.post('/api/logout', authTokenAPI, (req, res) => {
     res.clearCookie('refreshToken', {
         httpOnly: true,
         secure: false,
@@ -676,129 +673,129 @@ app.post('/api/verify-code', async (req, res) => {
     }
 });
 
-app.get('/api/check-username', authTokenAPI,  async (req, res) => {
-  try {
-    const usernameRaw = (req.query.username || '').trim();
+app.get('/api/check-username', async (req, res) => {
+    try {
+        const usernameRaw = (req.query.username || '').trim();
 
-    if (!usernameRaw) {
-      return res.status(400).json({
-        available: false,
-        reason: 'username_required',
-      });
+        if (!usernameRaw) {
+            return res.status(400).json({
+                available: false,
+                reason: 'username_required',
+            });
+        }
+
+        // normalize for checking
+        const username = usernameRaw.toLowerCase();
+
+        // basic validation (tune rules to your liking)
+        if (username.length < 3 || username.length > 20) {
+            return res.status(400).json({
+                available: false,
+                reason: 'invalid_length',
+            });
+        }
+
+        // allow letters, numbers, underscore, dot (example)
+        if (!/^[a-z0-9._]+$/.test(username)) {
+            return res.status(400).json({
+                available: false,
+                reason: 'invalid_characters',
+            });
+        }
+
+        // IMPORTANT: use normalized field (recommended) OR do a case-insensitive exact match
+        // Option A (recommended): if you add usernameLower in schema
+        // const exists = await User.exists({ usernameLower: username });
+
+        // Option B (works without schema changes but is slower):
+        const exists = await User.exists({
+            username: { $regex: `^${escapeRegex(usernameRaw)}$`, $options: 'i' }
+        });
+
+        if (exists) {
+            return res.status(200).json({
+                available: false,
+                reason: 'taken',
+                // optional suggestions
+                suggestions: [
+                    `${username}1`,
+                    `${username}__`,
+                    `${username}.${Math.floor(Math.random() * 900 + 100)}`
+                ],
+            });
+        }
+
+        return res.status(200).json({
+            available: true,
+            reason: 'available',
+        });
+    } catch (err) {
+        console.log(err);
+        return res.status(500).json({
+            message: 'Internal Server Error!',
+            available: false,
+        });
     }
-
-    // normalize for checking
-    const username = usernameRaw.toLowerCase();
-
-    // basic validation (tune rules to your liking)
-    if (username.length < 3 || username.length > 20) {
-      return res.status(400).json({
-        available: false,
-        reason: 'invalid_length',
-      });
-    }
-
-    // allow letters, numbers, underscore, dot (example)
-    if (!/^[a-z0-9._]+$/.test(username)) {
-      return res.status(400).json({
-        available: false,
-        reason: 'invalid_characters',
-      });
-    }
-
-    // IMPORTANT: use normalized field (recommended) OR do a case-insensitive exact match
-    // Option A (recommended): if you add usernameLower in schema
-    // const exists = await User.exists({ usernameLower: username });
-
-    // Option B (works without schema changes but is slower):
-    const exists = await User.exists({
-      username: { $regex: `^${escapeRegex(usernameRaw)}$`, $options: 'i' }
-    });
-
-    if (exists) {
-      return res.status(200).json({
-        available: false,
-        reason: 'taken',
-        // optional suggestions
-        suggestions: [
-          `${username}1`,
-          `${username}__`,
-          `${username}.${Math.floor(Math.random() * 900 + 100)}`
-        ],
-      });
-    }
-
-    return res.status(200).json({
-      available: true,
-      reason: 'available',
-    });
-  } catch (err) {
-    console.log(err);
-    return res.status(500).json({
-      message: 'Internal Server Error!',
-      available: false,
-    });
-  }
 });
 
-app.get('/api/check-chatname', async (req, res) => {
-  try {
-    console.log('check-chatname')
-    const chatnameRaw = (req.query.chatname || '').trim();
+app.get('/api/check-chatname', authTokenAPI, async (req, res) => {
+    try {
+        console.log('check-chatname')
+        const chatnameRaw = (req.query.chatname || '').trim();
 
-    if (!chatnameRaw) {
-      return res.status(400).json({
-        available: false,
-        reason: 'chatname_required',
-      });
+        if (!chatnameRaw) {
+            return res.status(400).json({
+                available: false,
+                reason: 'chatname_required',
+            });
+        }
+
+        // normalize for checking
+        const chatname = chatnameRaw.toLowerCase();
+
+        // basic validation (tune rules to your liking)
+        if (chatname.length < 3 || chatname.length > 20) {
+            return res.status(400).json({
+                available: false,
+                reason: 'invalid_length',
+            });
+        }
+
+        // allow letters, numbers, underscore, dot (example)
+        if (!/^[a-z0-9._]+$/.test(chatname)) {
+            return res.status(400).json({
+                available: false,
+                reason: 'invalid_characters',
+            });
+        }
+
+        // IMPORTANT: use normalized field (recommended) OR do a case-insensitive exact match
+        // Option A (recommended): if you add usernameLower in schema
+        // const exists = await User.exists({ usernameLower: username });
+
+        // Option B (works without schema changes but is slower):
+        const exists = await Chat.exists({
+            uniqueChatName: { $regex: `^${escapeRegex(chatnameRaw)}$`, $options: 'i' }
+        });
+
+        if (exists) {
+            return res.status(200).json({
+                available: false,
+                reason: 'taken'
+            });
+        }
+
+        return res.status(200).json({
+            available: true,
+            reason: 'available',
+        });
+    } catch (err) {
+        console.log(err);
+        return res.status(500).json({
+            message: 'Internal Server Error!',
+            available: false,
+        });
     }
-
-    // normalize for checking
-    const chatname = chatnameRaw.toLowerCase();
-
-    // basic validation (tune rules to your liking)
-    if (chatname.length < 3 || chatname.length > 20) {
-      return res.status(400).json({
-        available: false,
-        reason: 'invalid_length',
-      });
-    }
-
-    // allow letters, numbers, underscore, dot (example)
-    if (!/^[a-z0-9._]+$/.test(chatname)) {
-      return res.status(400).json({
-        available: false,
-        reason: 'invalid_characters',
-      });
-    }
-
-    // IMPORTANT: use normalized field (recommended) OR do a case-insensitive exact match
-    // Option A (recommended): if you add usernameLower in schema
-    // const exists = await User.exists({ usernameLower: username });
-
-    // Option B (works without schema changes but is slower):
-    const exists = await Chat.exists({
-      uniqueChatName: { $regex: `^${escapeRegex(chatnameRaw)}$`, $options: 'i' }
-    });
-
-    if (exists) {
-      return res.status(200).json({
-        available: false,
-        reason: 'taken'
-      });
-    }
-
-    return res.status(200).json({
-      available: true,
-      reason: 'available',
-    });
-  } catch (err) {
-    console.log(err);
-    return res.status(500).json({
-      message: 'Internal Server Error!',
-      available: false,
-    });
-  }
 });
 
 app.get('/api/forgot-password/user/:email', async (req, res) => {
@@ -1041,7 +1038,7 @@ app.post('/api/forgot-password/reset', async (req, res) => {
 });
 
 function escapeRegex(str) {
-  return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 app.get('/api/search', authTokenAPI, async (req, res) => {
@@ -1093,40 +1090,40 @@ app.get('/api/search', authTokenAPI, async (req, res) => {
 });
 
 app.get('/api/notification', authTokenAPI, async (req, res) => {
-  try {
-    const userId = req.user?.id;
+    try {
+        const userId = req.user?.id;
 
-    if (!userId) {
-      return res.status(400).json({ message: 'User ID not found in request!' });
+        if (!userId) {
+            return res.status(400).json({ message: 'User ID not found in request!' });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(userId)) {
+            return res.status(400).json({ message: 'Invalid user ID' });
+        }
+
+        const userObjectId = new mongoose.Types.ObjectId(userId);
+
+        // ✅ Then fetch notifications
+        const notifications = await Notification.find({ user: userObjectId })
+            .sort({ createdAt: -1 }) // optional but recommended
+            .populate('sender', '_id firstName lastName username dp')
+            .populate('chat', '_id chatName chatAdmin chatDp')
+            .populate('message', '_id message type')
+            .lean();
+
+
+        // ✅ Mark all unread notifications as read
+        await Notification.updateMany(
+            { user: userObjectId, isRead: false },
+            { $set: { isRead: true } }
+        );
+
+        return res.status(200).json({ notifications });
+
+    } catch (error) {
+        console.error('[Get notifications error]:', error);
+        return res.status(500).json({ message: 'Internal Server Error!' });
     }
-
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
-      return res.status(400).json({ message: 'Invalid user ID' });
-    }
-
-    const userObjectId = new mongoose.Types.ObjectId(userId);
-
-    // ✅ Then fetch notifications
-    const notifications = await Notification.find({ user: userObjectId })
-      .sort({ createdAt: -1 }) // optional but recommended
-      .populate('sender', '_id firstName lastName username dp')
-      .populate('chat', '_id chatName chatAdmin chatDp')
-      .populate('message', '_id message type')
-      .lean();
-
-    
-    // ✅ Mark all unread notifications as read
-    await Notification.updateMany(
-      { user: userObjectId, isRead: false },
-      { $set: { isRead: true } }
-    );
-
-    return res.status(200).json({ notifications });
-
-  } catch (error) {
-    console.error('[Get notifications error]:', error);
-    return res.status(500).json({ message: 'Internal Server Error!' });
-  }
 });
 
 app.delete('/api/notification/:notificationId', authTokenAPI, async (req, res) => {
@@ -1171,7 +1168,7 @@ app.get('/api/users', authTokenAPI, async (req, res) => {
             return res.status(400).json({ message: 'Invalid user ID' });
         }
 
-        const filter = { _id: { $ne: req.user.id }, $or: [{status: 'active'}, {status: 'warned'}] };
+        const filter = { _id: { $ne: req.user.id }, $or: [{ status: 'active' }, { status: 'warned' }] };
 
         // Search by name if query exists
         if (query) {
@@ -1204,118 +1201,118 @@ app.get('/api/users', authTokenAPI, async (req, res) => {
 });
 
 app.get('/api/user/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
+    try {
+        const { userId } = req.params;
 
-    // 1. Validate ObjectId
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
-      return res.status(400).json({ message: 'Invalid user ID' });
+        // 1. Validate ObjectId
+        if (!mongoose.Types.ObjectId.isValid(userId)) {
+            return res.status(400).json({ message: 'Invalid user ID' });
+        }
+
+        // 2. Fetch user with controlled fields only
+        const userDB = await User.findById(userId)
+            .select('_id firstName lastName username dp friends about')
+            .populate('friends', '_id firstName lastName username dp')
+            .lean();
+
+        // 3. Handle not found
+        if (!userDB) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // 4. Defensive defaults
+        userDB.friends = userDB.friends || [];
+
+        // 5. Respond
+        res.status(200).json({ userDB });
+
+    } catch (err) {
+        console.error('GET /api/user/:userId error:', err);
+        res.status(500).json({ message: 'Internal Server Error' });
     }
-
-    // 2. Fetch user with controlled fields only
-    const userDB = await User.findById(userId)
-      .select('_id firstName lastName username dp friends about')
-      .populate('friends', '_id firstName lastName username dp')
-      .lean();
-
-    // 3. Handle not found
-    if (!userDB) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // 4. Defensive defaults
-    userDB.friends = userDB.friends || [];
-
-    // 5. Respond
-    res.status(200).json({ userDB });
-
-  } catch (err) {
-    console.error('GET /api/user/:userId error:', err);
-    res.status(500).json({ message: 'Internal Server Error' });
-  }
 });
 
 app.get('/api/user-dp', authTokenAPI, async (req, res) => {
-    try{
+    try {
         const userId = req.user.id;
-        if(!mongoose.isValidObjectId(userId)){
-            return res.status(400).json({message: 'Invalid User ID!'});
+        if (!mongoose.isValidObjectId(userId)) {
+            return res.status(400).json({ message: 'Invalid User ID!' });
         }
         const user = await User.findById(userId).select('dp');
-        if(!user){
-            return res.status(404).json({message: 'No User Found!'});
+        if (!user) {
+            return res.status(404).json({ message: 'No User Found!' });
         }
-        return res.status(200).json({dp: user.dp});
+        return res.status(200).json({ dp: user.dp });
     } catch (err) {
         console.log(err);
-        res.status(500).json({message: 'Internal Server Error!'})
+        res.status(500).json({ message: 'Internal Server Error!' })
     }
 })
 
 app.get('/api/friends', authTokenAPI, async (req, res) => {
-  try {
-    const id = req.user.id;
-    const query = (req.query.q || '').trim();
+    try {
+        const id = req.user.id;
+        const query = (req.query.q || '').trim();
 
-    // Validate that the ID is a valid MongoDB ObjectId
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ message: 'Invalid user ID' });
+        // Validate that the ID is a valid MongoDB ObjectId
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ message: 'Invalid user ID' });
+        }
+
+        // Fetch user's friends IDs
+        const user = await User.findById(id).select('friends').lean();
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        let friendsQuery = { _id: { $in: user.friends } };
+
+        // If search query exists, filter by username, firstName, or lastName
+        if (query) {
+            friendsQuery.$or = [
+                { username: { $regex: query, $options: 'i' } },
+                { firstName: { $regex: query, $options: 'i' } },
+                { lastName: { $regex: query, $options: 'i' } },
+            ];
+        }
+
+        const friends = await User.find(friendsQuery)
+            .select('_id firstName lastName username dp')
+            .lean();
+
+        res.status(200).json({ friends: friends || [] });
+    } catch (err) {
+        console.error('return-friends/:id error:', err);
+        res.status(500).json({ message: 'Internal Server Error' });
     }
-
-    // Fetch user's friends IDs
-    const user = await User.findById(id).select('friends').lean();
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    let friendsQuery = { _id: { $in: user.friends } };
-
-    // If search query exists, filter by username, firstName, or lastName
-    if (query) {
-      friendsQuery.$or = [
-        { username: { $regex: query, $options: 'i' } },
-        { firstName: { $regex: query, $options: 'i' } },
-        { lastName: { $regex: query, $options: 'i' } },
-      ];
-    }
-
-    const friends = await User.find(friendsQuery)
-      .select('_id firstName lastName username dp')
-      .lean();
-
-    res.status(200).json({ friends: friends || [] });
-  } catch (err) {
-    console.error('return-friends/:id error:', err);
-    res.status(500).json({ message: 'Internal Server Error' });
-  }
 });
 
 app.get('/api/friends/:id', authTokenAPI, async (req, res) => {
-  try {
-    const { id } = req.params;
+    try {
+        const { id } = req.params;
 
-    // Validate that the ID is a valid MongoDB ObjectId
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ message: 'Invalid user ID' });
+        // Validate that the ID is a valid MongoDB ObjectId
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ message: 'Invalid user ID' });
+        }
+
+        const user = await User.findById(id)
+            .select('friends')
+            .populate('friends', '_id firstName lastName username avatar')
+            .lean();
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Always return an array
+        res.status(200).json({
+            friends: user.friends || [],
+        });
+    } catch (err) {
+        console.error('return-friends/:id error:', err);
+        res.status(500).json({ message: 'Internal Server Error' });
     }
-
-    const user = await User.findById(id)
-      .select('friends')
-      .populate('friends', '_id firstName lastName username avatar')
-      .lean();
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Always return an array
-    res.status(200).json({
-      friends: user.friends || [],
-    });
-  } catch (err) {
-    console.error('return-friends/:id error:', err);
-    res.status(500).json({ message: 'Internal Server Error' });
-  }
 });
 
 app.get('/api/friend-requests', authTokenAPI, async (req, res) => {
@@ -1429,46 +1426,46 @@ app.get('/api/chats', authTokenAPI, async (req, res) => {
 });
 
 app.get('/api/subscribed-chats', authTokenAPI, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
-      return res.status(400).json({ message: 'Invalid userId!' });
+    try {
+        const userId = req.user.id;
+        if (!mongoose.Types.ObjectId.isValid(userId)) {
+            return res.status(400).json({ message: 'Invalid userId!' });
+        }
+
+        const { lastId } = req.query;
+        const limit = 30;
+
+        const filter = {
+            subscribers: new mongoose.Types.ObjectId(userId),
+        };
+
+        if (lastId) {
+            if (!mongoose.Types.ObjectId.isValid(lastId)) {
+                console.warn('[GET /api/subscribed-chats] INVALID_LAST_ID', lastId);
+                return res.status(400).json({ message: 'Invalid lastId!' });
+            }
+            filter._id = { $lt: new mongoose.Types.ObjectId(lastId) };
+        }
+
+        const chats = await Chat.find(filter)
+            .sort({ _id: -1 })
+            .populate('participants', '_id firstName lastName username dp')
+            .populate('liveComments.from', '_id username')
+            .limit(limit)
+            .lean({ defaults: true });
+
+        const chatsWithViewers = chats.map(chat => {
+            const chatId = String(chat._id);
+            const count = liveViewers?.has(chatId) ? liveViewers.get(chatId).size : 0;
+            return { ...chat, liveViewerCount: count };
+        });
+
+        return res.status(200).json({ chats: chatsWithViewers });
+    } catch (err) {
+        console.error('[GET /api/subscribed-chats] SERVER_ERROR', err);
+        return res.status(500).json({ message: 'Server Error!' });
     }
-
-    const { lastId } = req.query;
-    const limit = 30;
-
-    const filter = {
-      subscribers: new mongoose.Types.ObjectId(userId),
-    };
-
-    if (lastId) {
-      if (!mongoose.Types.ObjectId.isValid(lastId)) {
-        console.warn('[GET /api/subscribed-chats] INVALID_LAST_ID', lastId);
-        return res.status(400).json({ message: 'Invalid lastId!' });
-      }
-      filter._id = { $lt: new mongoose.Types.ObjectId(lastId) };
-    }
-
-    const chats = await Chat.find(filter)
-      .sort({ _id: -1 })
-      .populate('participants', '_id firstName lastName username dp')
-      .populate('liveComments.from', '_id username')
-      .limit(limit)
-      .lean({ defaults: true });
-
-    const chatsWithViewers = chats.map(chat => {
-      const chatId = String(chat._id);
-      const count = liveViewers?.has(chatId) ? liveViewers.get(chatId).size : 0;
-      return { ...chat, liveViewerCount: count };
-    });
-
-    return res.status(200).json({ chats: chatsWithViewers });
-  } catch (err) {
-    console.error('[GET /api/subscribed-chats] SERVER_ERROR', err);
-    return res.status(500).json({ message: 'Server Error!' });
-  }
-}); 
+});
 
 app.get('/api/chats/:id', authTokenAPI, async (req, res) => {
     const { id } = req.params;
@@ -1510,51 +1507,51 @@ app.get('/api/chats/:id', authTokenAPI, async (req, res) => {
 });
 
 app.get('/api/user-chats/:id', authTokenAPI, async (req, res) => {
-  const { id } = req.params;
-  const { lastId } = req.query;
-  const limit = 30;
+    const { id } = req.params;
+    const { lastId } = req.query;
+    const limit = 30;
 
-  console.log('[GET /api/user-chats/:id] REQUEST', id);
+    console.log('[GET /api/user-chats/:id] REQUEST', id);
 
-  try {
-    // Validate user id
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      console.warn('[GET /api/user-chats/:id] INVALID_USER_ID', id);
-      return res.status(400).json({ message: 'Invalid user id!' });
+    try {
+        // Validate user id
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            console.warn('[GET /api/user-chats/:id] INVALID_USER_ID', id);
+            return res.status(400).json({ message: 'Invalid user id!' });
+        }
+
+        const userObjectId = new mongoose.Types.ObjectId(id);
+
+        const filter = {
+            $or: [
+                { chatAdmin: userObjectId },
+                { participants: userObjectId }
+            ]
+        };
+
+        // Pagination
+        if (lastId) {
+            if (!mongoose.Types.ObjectId.isValid(lastId)) {
+                console.warn('[GET /api/user-chats/:id] INVALID_LAST_ID', lastId);
+                return res.status(400).json({ message: 'Invalid lastId!' });
+            }
+
+            filter._id = { $lt: new mongoose.Types.ObjectId(lastId) };
+        }
+
+        const chats = await Chat.find(filter)
+            .sort({ _id: -1 })
+            .populate('participants', '_id firstName lastName username dp')
+            .populate('liveComments.from', '_id username')
+            .limit(limit)
+            .lean({ defaults: true });
+
+        return res.status(200).json({ chats });
+
+    } catch (err) {
+        console.error('[GET /api/user-chats/:id] SERVER_ERROR', err);
+        return res.status(500).json({ message: 'Server Error!' });
     }
-
-    const userObjectId = new mongoose.Types.ObjectId(id);
-
-    const filter = {
-      $or: [
-        { chatAdmin: userObjectId },
-        { participants: userObjectId }
-      ]
-    };
-
-    // Pagination
-    if (lastId) {
-      if (!mongoose.Types.ObjectId.isValid(lastId)) {
-        console.warn('[GET /api/user-chats/:id] INVALID_LAST_ID', lastId);
-        return res.status(400).json({ message: 'Invalid lastId!' });
-      }
-
-      filter._id = { $lt: new mongoose.Types.ObjectId(lastId) };
-    }
-
-    const chats = await Chat.find(filter)
-        .sort({ _id: -1 })
-        .populate('participants', '_id firstName lastName username dp')
-        .populate('liveComments.from', '_id username')
-        .limit(limit)
-        .lean({ defaults: true });
-
-    return res.status(200).json({ chats });
-
-  } catch (err) {
-    console.error('[GET /api/user-chats/:id] SERVER_ERROR', err);
-    return res.status(500).json({ message: 'Server Error!' });
-  }
 });
 
 app.get('/api/messages/:chatId', authTokenAPI, async (req, res) => {
@@ -1655,7 +1652,7 @@ app.get("/api/participant-reaction/:msgId", authTokenAPI, async (req, res) => {
 });
 
 app.delete('/api/message/:msgId', authTokenAPI, async (req, res) => {
-    try{
+    try {
         const userId = req.user.id;
         const msgId = req.params.msgId;
         if (!mongoose.Types.ObjectId.isValid(userId)) {
@@ -1666,22 +1663,22 @@ app.delete('/api/message/:msgId', authTokenAPI, async (req, res) => {
             return res.status(400).json({ message: 'Invalid Message ID' });
         }
 
-        const deletedMessage = await Message.deleteOne({_id: msgId, from: userId});
+        const deletedMessage = await Message.deleteOne({ _id: msgId, from: userId });
 
-        if(deletedMessage.deletedCount === 0) {
-            return res.status(400).json({message: "Couldn't delete message"});
+        if (deletedMessage.deletedCount === 0) {
+            return res.status(400).json({ message: "Couldn't delete message" });
         }
 
-        return res.status(200).json({message: 'Message deleted Successfully!'});
+        return res.status(200).json({ message: 'Message deleted Successfully!' });
 
     } catch (err) {
         console.log(err);
-        return res.status(500).json({message: 'Server Error!'})
+        return res.status(500).json({ message: 'Server Error!' })
     }
 });
 
 app.get('/api/user', authTokenAPI, async (req, res) => {
-     try {
+    try {
         // Validate user ID
         if (!req.user.id || !mongoose.Types.ObjectId.isValid(req.user.id)) {
             return res.status(400).json({ message: 'Got no valid User ID!' });
@@ -1837,7 +1834,7 @@ app.patch('/api/user/password', authTokenAPI, async (req, res) => {
     }
 });
 
-app.patch('/api/user/dob', authTokenAPI, async (req,res) => {
+app.patch('/api/user/dob', authTokenAPI, async (req, res) => {
     try {
         const { dob } = req.body;
 
@@ -1976,8 +1973,8 @@ app.delete("/api/user", authTokenAPI, async (req, res) => {
 });
 
 app.post('/api/message', authTokenAPI, async (req, res) => {
-    try{
-        let {from, chatId, message, isReply, repliedTo, media, type, optimisticId} = req.body;
+    try {
+        let { from, chatId, message, isReply, repliedTo, media, type, optimisticId } = req.body;
         console.log(req.body)
         from = new mongoose.Types.ObjectId(from);
         chatId = new mongoose.Types.ObjectId(chatId);
@@ -1988,7 +1985,7 @@ app.post('/api/message', authTokenAPI, async (req, res) => {
         const chat = await Chat.findById(chatId).select('participants');
         if (!chat?.participants.some(p => p.equals(from))) {
             console.log('This user is not allowed to send messages');
-            return res.status(403).json({message: 'This user is not allowed to send messages'});
+            return res.status(403).json({ message: 'This user is not allowed to send messages' });
         }
 
         const newMessage = await Message.create({
@@ -2008,11 +2005,11 @@ app.post('/api/message', authTokenAPI, async (req, res) => {
                 select: 'from message media type',
                 populate: { path: 'from', select: '_id username firstName lastName dp' }, // sender of repliedTo
             });
-        return res.status(200).json({message: populatedMessage, optimisticId});
+        return res.status(200).json({ message: populatedMessage, optimisticId });
     } catch (err) {
         console.log(err);
-        return res.status(500).json({message: 'Internal Server Error'})
-    }   
+        return res.status(500).json({ message: 'Internal Server Error' })
+    }
 })
 
 app.post('/api/chat', authTokenAPI, async (req, res) => {
@@ -2067,53 +2064,53 @@ app.post('/api/chat', authTokenAPI, async (req, res) => {
 
 app.post("/api/upload-images", authTokenAPI, upload.array("media", 10), async (req, res) => {
     try {
-      if (!req.files || req.files.length === 0) {
-        return res.status(400).json({ message: "No files uploaded" });
-      }
+        if (!req.files || req.files.length === 0) {
+            return res.status(400).json({ message: "No files uploaded" });
+        }
 
-      const uploads = await Promise.all(
-        req.files.map(async (file) => {
-          const isImage = file.mimetype?.startsWith("image/");
-          const isVideo = file.mimetype?.startsWith("video/");
+        const uploads = await Promise.all(
+            req.files.map(async (file) => {
+                const isImage = file.mimetype?.startsWith("image/");
+                const isVideo = file.mimetype?.startsWith("video/");
 
-          if (!isImage && !isVideo) {
-            throw new Error(`Unsupported file type: ${file.mimetype}`);
-          }
+                if (!isImage && !isVideo) {
+                    throw new Error(`Unsupported file type: ${file.mimetype}`);
+                }
 
-          const ext =
-            mime.extension(file.mimetype) ||
-            path.extname(file.originalname).replace(".", "") ||
-            (isImage ? "jpg" : "mp4");
+                const ext =
+                    mime.extension(file.mimetype) ||
+                    path.extname(file.originalname).replace(".", "") ||
+                    (isImage ? "jpg" : "mp4");
 
-          const folder = isImage ? "media/images" : "media/videos";
-          const key = `${folder}/${crypto.randomUUID()}.${ext}`;
+                const folder = isImage ? "media/images" : "media/videos";
+                const key = `${folder}/${crypto.randomUUID()}.${ext}`;
 
-          const { url } = await uploadBufferToR2({
-            key,
-            buffer: file.buffer,
-            contentType: file.mimetype,
-            // Optional: different caching for videos
-            // cacheControl: isVideo ? "public, max-age=86400" : "public, max-age=31536000, immutable",
-          });
+                const { url } = await uploadBufferToR2({
+                    key,
+                    buffer: file.buffer,
+                    contentType: file.mimetype,
+                    // Optional: different caching for videos
+                    // cacheControl: isVideo ? "public, max-age=86400" : "public, max-age=31536000, immutable",
+                });
 
-          if (!url) throw new Error("R2_PUBLIC_BASE not configured");
+                if (!url) throw new Error("R2_PUBLIC_BASE not configured");
 
-          return {
-            url,
-            key,
-            type: isImage ? "image" : "video",
-            mimetype: file.mimetype,
-            size: file.size,
-          };
-        })
-      );
+                return {
+                    url,
+                    key,
+                    type: isImage ? "image" : "video",
+                    mimetype: file.mimetype,
+                    size: file.size,
+                };
+            })
+        );
 
-      return res.status(200).json({ media: uploads });
+        return res.status(200).json({ media: uploads });
     } catch (err) {
-      console.error(err);
-      return res.status(500).json({ message: "Server Error!" });
+        console.error(err);
+        return res.status(500).json({ message: "Server Error!" });
     }
-  }
+}
 );
 
 app.post("/api/upload-user-dp", authTokenAPI, upload.single('image'), async (req, res) => {
@@ -2149,49 +2146,49 @@ app.post("/api/upload-user-dp", authTokenAPI, upload.single('image'), async (req
 
 app.post("/api/upload-chat-dp", authTokenAPI, upload.single("image"), async (req, res) => {
     try {
-      const { chatId } = req.body;
-      const userId = req.user.id;
+        const { chatId } = req.body;
+        const userId = req.user.id;
 
-      if (!chatId) return res.status(400).json({ message: "Please send chat ID!" });
-      if (!mongoose.Types.ObjectId.isValid(chatId)) {
-        return res.status(400).json({ message: "Please send a valid chat ID!" });
-      }
+        if (!chatId) return res.status(400).json({ message: "Please send chat ID!" });
+        if (!mongoose.Types.ObjectId.isValid(chatId)) {
+            return res.status(400).json({ message: "Please send a valid chat ID!" });
+        }
 
-      const chat = await Chat.findById(chatId).select("chatAdmin");
-      if (!chat) return res.status(404).json({ message: "No Chat found" });
+        const chat = await Chat.findById(chatId).select("chatAdmin");
+        if (!chat) return res.status(404).json({ message: "No Chat found" });
 
-      if (String(chat.chatAdmin) !== String(userId)) {
-        return res.status(403).json({ message: "User not Authorized!" });
-      }
+        if (String(chat.chatAdmin) !== String(userId)) {
+            return res.status(403).json({ message: "User not Authorized!" });
+        }
 
-      if (!req.file) {
-        return res.status(400).json({ message: "No image received" });
-      }
+        if (!req.file) {
+            return res.status(400).json({ message: "No image received" });
+        }
 
-      const ext =
-        mime.extension(req.file.mimetype) ||
-        path.extname(req.file.originalname || "").replace(".", "") ||
-        "jpg";
+        const ext =
+            mime.extension(req.file.mimetype) ||
+            path.extname(req.file.originalname || "").replace(".", "") ||
+            "jpg";
 
-      const key = `chat-dp/${chatId}/${crypto.randomUUID()}.${ext}`;
+        const key = `chat-dp/${chatId}/${crypto.randomUUID()}.${ext}`;
 
-      const { url } = await uploadBufferToR2({
-        key,
-        buffer: req.file.buffer,
-        contentType: req.file.mimetype,
-        cacheControl: "public, max-age=31536000, immutable",
-      });
+        const { url } = await uploadBufferToR2({
+            key,
+            buffer: req.file.buffer,
+            contentType: req.file.mimetype,
+            cacheControl: "public, max-age=31536000, immutable",
+        });
 
-      if (!url) return res.status(500).json({ message: "R2_PUBLIC_BASE not configured" });
+        if (!url) return res.status(500).json({ message: "R2_PUBLIC_BASE not configured" });
 
-      await Chat.findByIdAndUpdate(chatId, { chatDp: url });
+        await Chat.findByIdAndUpdate(chatId, { chatDp: url });
 
-      return res.status(200).json({ url, key });
+        return res.status(200).json({ url, key });
     } catch (err) {
-      console.error(err);
-      return res.status(500).json({ message: "Server Error!" });
+        console.error(err);
+        return res.status(500).json({ message: "Server Error!" });
     }
-  }
+}
 );
 
 app.post("/api/upload-audio", authTokenAPI, uploadAudio.single("audio"), async (req, res) => {
@@ -2230,28 +2227,28 @@ app.post("/api/upload-audio", authTokenAPI, uploadAudio.single("audio"), async (
 });
 
 app.post('/api/live-comment', authTokenAPI, async (req, res) => {
-    try{
-        const {chatId, message, repliedTo} = req.body;
+    try {
+        const { chatId, message, repliedTo } = req.body;
         const from = new mongoose.Types.ObjectId(req.user.id);
 
-        if(!mongoose.Types.ObjectId.isValid(chatId)) return res.status(400).json({message: 'Invalid chatId'});
-        if(!message || !message.trim()) return res.status(400).json({message: 'Comment is required'})
+        if (!mongoose.Types.ObjectId.isValid(chatId)) return res.status(400).json({ message: 'Invalid chatId' });
+        if (!message || !message.trim()) return res.status(400).json({ message: 'Comment is required' })
 
         const payload = {
             from,
             message: message.trim(),
             createdAt: new Date(),
         }
-        if(repliedTo && mongoose.Types.ObjectId.isValid(repliedTo)){
+        if (repliedTo && mongoose.Types.ObjectId.isValid(repliedTo)) {
             payload.repliedTo = repliedTo;
         }
 
-        const result = await Chat.updateOne({_id: chatId}, { $push: {liveComments: { $each: [payload], $slice: -500 }} })
-        if(result.modifiedCount === 0) return res.status(400).json({message: 'Comment could not be creaeted!'});
+        const result = await Chat.updateOne({ _id: chatId }, { $push: { liveComments: { $each: [payload], $slice: -500 } } })
+        if (result.modifiedCount === 0) return res.status(400).json({ message: 'Comment could not be creaeted!' });
 
         const fromUser = await User.findById(from).select('_id username');
 
-        if(fromUser) {
+        if (fromUser) {
             payload.from = fromUser
         }
 
@@ -2333,8 +2330,8 @@ app.put('/api/chat/participant', authTokenAPI, async (req, res) => {
             return res.status(404).json({ message: 'Chat not found!' });
         }
 
-        if(String(chat.chatAdmin) !== String(req.user.id)){
-            return res.status(400).json({message: "This user doesn't have permission to add participants."});
+        if (String(chat.chatAdmin) !== String(req.user.id)) {
+            return res.status(400).json({ message: "This user doesn't have permission to add participants." });
         }
 
         // 2. Add users to chat.requested_participants (no duplicates)
@@ -2794,7 +2791,7 @@ app.post('/api/friends/reject/:userId', authTokenAPI, async (req, res) => {
 });
 
 app.delete('/api/friends/:userId', authTokenAPI, async (req, res) => {
-     try {
+    try {
         const userId = req.user?.id;
         const friendId = req.params.userId;
 
@@ -2863,7 +2860,7 @@ app.post('/api/notification', authTokenAPI, async (req, res) => {
             .populate('message', '_id message type')
             .lean(); // optional: return plain JS object
 
-            console.log(populatedNotification);
+        console.log(populatedNotification);
         return res.status(200).json({ notification: populatedNotification });
 
     } catch (err) {
@@ -2876,74 +2873,74 @@ app.post('/api/notification', authTokenAPI, async (req, res) => {
 });
 
 app.get('/api/media/:chatId', authTokenAPI, async (req, res) => {
-  try {
-    const { chatId } = req.params;
-    const { lastId, limit = 30, mediaType } = req.query;
+    try {
+        const { chatId } = req.params;
+        const { lastId, limit = 30, mediaType } = req.query;
 
-    if (!mongoose.Types.ObjectId.isValid(chatId)) {
-      return res.status(400).json({ message: "Invalid chatId" });
+        if (!mongoose.Types.ObjectId.isValid(chatId)) {
+            return res.status(400).json({ message: "Invalid chatId" });
+        }
+
+        const safeLimit = Math.min(Number(limit) || 30, 200);
+
+        const filter = {
+            chatId: new mongoose.Types.ObjectId(chatId),
+            type: "media",
+            media: { $exists: true, $ne: [] }, // ensure there is media
+        };
+
+        // Cursor pagination
+        if (lastId) {
+            if (!mongoose.Types.ObjectId.isValid(lastId)) {
+                return res.status(400).json({ message: "Invalid lastId" });
+            }
+            filter._id = { $lt: new mongoose.Types.ObjectId(lastId) };
+        }
+
+        // Optional filter: only messages containing a certain media subtype
+        if (mediaType && ["image", "video", "audio"].includes(mediaType)) {
+            filter["media.type"] = mediaType;
+        }
+
+        const mediaMessages = await Message.find(filter)
+            .populate('from', '_id firstName lastName dp')
+            .sort({ _id: -1 })
+            .limit(safeLimit)
+            .lean();
+
+        if (mediaMessages.length === 0) {
+            return res.status(404).json({ message: "No media found for this chat!" });
+        }
+
+        const result = await Message.aggregate([
+            {
+                $match: {
+                    chatId: new mongoose.Types.ObjectId(chatId),
+                },
+            },
+
+            // explode media array
+            { $unwind: "$media" },
+
+            // keep only image + video
+            {
+                $match: {
+                    "media.type": { $in: ["image", "video"] },
+                },
+            },
+
+            {
+                $count: "totalMedia",
+            },
+        ]);
+
+        const total = result.length > 0 ? result[0].totalMedia : 0;
+
+        return res.status(200).json({ media: mediaMessages, total });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ message: "Server error", details: err.message });
     }
-
-    const safeLimit = Math.min(Number(limit) || 30, 200);
-
-    const filter = {
-      chatId: new mongoose.Types.ObjectId(chatId),
-      type: "media",
-      media: { $exists: true, $ne: [] }, // ensure there is media
-    };
-
-    // Cursor pagination
-    if (lastId) {
-      if (!mongoose.Types.ObjectId.isValid(lastId)) {
-        return res.status(400).json({ message: "Invalid lastId" });
-      }
-      filter._id = { $lt: new mongoose.Types.ObjectId(lastId) };
-    }
-
-    // Optional filter: only messages containing a certain media subtype
-    if (mediaType && ["image", "video", "audio"].includes(mediaType)) {
-      filter["media.type"] = mediaType;
-    }
-
-    const mediaMessages = await Message.find(filter)
-        .populate('from', '_id firstName lastName dp')
-        .sort({ _id: -1 })
-        .limit(safeLimit)
-        .lean();
-
-    if (mediaMessages.length === 0) {
-      return res.status(404).json({ message: "No media found for this chat!" });
-    }
-
-    const result = await Message.aggregate([
-      {
-        $match: {
-          chatId: new mongoose.Types.ObjectId(chatId),
-        },
-      },
-
-      // explode media array
-      { $unwind: "$media" },
-
-      // keep only image + video
-      {
-        $match: {
-          "media.type": { $in: ["image", "video"] },
-        },
-      },
-
-      {
-        $count: "totalMedia",
-      },
-    ]);
-
-    const total = result.length > 0 ? result[0].totalMedia : 0;
-
-    return res.status(200).json({ media: mediaMessages, total });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ message: "Server error", details: err.message });
-  }
 });
 
 app.post('/api/report', authTokenAPI, async (req, res) => {
@@ -2996,7 +2993,7 @@ app.post('/api/reaction', authTokenAPI, async (req, res) => {
         const userObjectId = new mongoose.Types.ObjectId(userId);
 
         const user = await User.findById(userObjectId).select('_id username');
-        if(!user){
+        if (!user) {
             return res.status(404).json({ message: "No User Found" });
         }
 
@@ -3061,7 +3058,7 @@ app.post('/api/reaction', authTokenAPI, async (req, res) => {
 
     } catch (err) {
         console.log(err);
-        return res.status(500).json({message: 'Internal Server Error!'})
+        return res.status(500).json({ message: 'Internal Server Error!' })
     }
 });
 
@@ -3069,7 +3066,7 @@ io.on('connection', (socket) => {
     console.log("A user connected:", socket.user);
 
     socket.on('register', async (userID) => {
-        try{
+        try {
             if (!userID) return;
             const userDB = await User.findById(userID).select('firstName lastName');
             if (!userDB) return;
@@ -3087,7 +3084,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('joinChat', async ({ chatId, role }) => {
-        try{
+        try {
             const userId = socket.user.id;
 
             if (!mongoose.Types.ObjectId.isValid(chatId)) return;
@@ -3110,14 +3107,14 @@ io.on('connection', (socket) => {
             socket.join(`chat:${chatIdStr}:members`);
             socket.currentChatId = chatId;
             socket.currentRole = "member";
-        } catch (err){
+        } catch (err) {
             console.log(err);
             return;
         }
     });
 
     socket.on('leaveChat', (chatId) => {
-        try{
+        try {
             const userId = socket.user.id;
             if (!chatId) return;
 
@@ -3133,14 +3130,14 @@ io.on('connection', (socket) => {
     });
 
     socket.on('participantRemoved', async ({ userId, chatId }) => {
-        try{
+        try {
             console.log('Received particpantRemoved');
-            if(!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(chatId)) return;
+            if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(chatId)) return;
             const removedUser = await User.findById(userId);
-            if(!removedUser) return;
+            if (!removedUser) return;
             const chat = await Chat.findById(chatId).select('chatAdmin');
-            if(!chat) return;
-            if(String(socket.user.id) !== String(chat.chatAdmin)) return;
+            if (!chat) return;
+            if (String(socket.user.id) !== String(chat.chatAdmin)) return;
             const newMessage = await Message.create({
                 from: chat.chatAdmin,
                 chatId,
@@ -3157,13 +3154,13 @@ io.on('connection', (socket) => {
     });
 
     socket.on('participantRequested', async ({ userId, chatId, message }) => {
-        try{
+        try {
             console.log('Received particpantAdded');
-            if(!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(chatId)) return;
+            if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(chatId)) return;
             const chat = await Chat.findById(chatId).select('chatAdmin');
-            if(String(socket.user.id) !== String(chat.chatAdmin)) return;
+            if (String(socket.user.id) !== String(chat.chatAdmin)) return;
             const addedUser = await User.findById(userId).select('_id firstName lastName username dp').lean();
-            if(!addedUser) return
+            if (!addedUser) return
             io.to(chatId).emit('participantRequested', { chatId, msg: message });
         } catch (err) {
             console.log(err);
@@ -3171,32 +3168,32 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('participantAccepted', async ({chatId}) => {
-        try{
+    socket.on('participantAccepted', async ({ chatId }) => {
+        try {
             console.log('Received participantAccepted');
             const userId = socket.user.id;
-            if(!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(chatId)) return;
-            const chat = await Chat.findOne({_id: chatId, participants: userId});
-            if(!chat) return;
+            if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(chatId)) return;
+            const chat = await Chat.findOne({ _id: chatId, participants: userId });
+            if (!chat) return;
             const user = await User.findById(userId).select('_id username firstName lastName dp');
-            if(!user) return;
+            if (!user) return;
             console.log('Hogya participantAccepted');
-            io.to(chatId).emit('participantAccepted', {chatId, user});
+            io.to(chatId).emit('participantAccepted', { chatId, user });
         } catch (err) {
             console.log(err);
             return;
         }
     })
 
-    socket.on('participantJoined', async ({chatId}) => {
-        try{
+    socket.on('participantJoined', async ({ chatId }) => {
+        try {
             const userId = socket.user.id;
-            if(!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(chatId)) return;
-            const chat = await Chat.findOne({_id: chatId, participants: userId});
-            if(!chat) return;
+            if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(chatId)) return;
+            const chat = await Chat.findOne({ _id: chatId, participants: userId });
+            if (!chat) return;
             const user = await User.findById(userId).select('_id username firstName lastName dp').lean();
-            if(!user) return
-            io.to(chatId).emit('participantJoined', {user, chatId});
+            if (!user) return
+            io.to(chatId).emit('participantJoined', { user, chatId });
         } catch (err) {
             console.log(err);
             return;
@@ -3209,7 +3206,7 @@ io.on('connection', (socket) => {
 
     socket.on('message', async ({ message }) => {
         try {
-            if(String(socket.user.id) !== String(message.from._id)){
+            if (String(socket.user.id) !== String(message.from._id)) {
                 return;
             }
             if (!message) {
@@ -3295,7 +3292,7 @@ io.on('connection', (socket) => {
             const fromId = socket.user.id;
             const chat = await Chat.findById(chatId);
             if (!chat) return;
-            if(!chat.participants.some(p => String(p) === String(fromId))) return;
+            if (!chat.participants.some(p => String(p) === String(fromId))) return;
             const username = onlineUsers[fromId]?.username || `${socket.user.firstName || ''} ${socket.user.lastName || ''}`.trim();
 
             const payload = {
@@ -3353,7 +3350,7 @@ io.on('connection', (socket) => {
                 return;
             }
 
-            emitToChat(chatId, 'liveCommentPin', {chatId, comment});
+            emitToChat(chatId, 'liveCommentPin', { chatId, comment });
 
         } catch (err) {
             console.error(err);
@@ -3449,9 +3446,9 @@ io.on('connection', (socket) => {
     });
 
     socket.on('notification', async (notification) => {
-        try{
+        try {
             const receiverSocket = onlineUsers[notification.user];
-            if(receiverSocket){
+            if (receiverSocket) {
                 io.to(receiverSocket.socketID).emit('notification', notification)
             }
         } catch (err) {
@@ -3489,9 +3486,9 @@ io.on('connection', (socket) => {
                 return;
             }
 
-            const message = await Message.findOne({_id: messageId, from: socket.user.id, chatId});
+            const message = await Message.findOne({ _id: messageId, from: socket.user.id, chatId });
 
-            if(!message) return;
+            if (!message) return;
 
             emitToChat(chatId, 'deleteMessage', msg);
 

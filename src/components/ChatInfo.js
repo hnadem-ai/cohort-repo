@@ -292,16 +292,18 @@ function ChatInfo({
               ))}
 
               {/* last tile = See more */}
-              <button
-                type="button"
-                className="media-preview-more"
-                onClick={() => openMediaViewer(0)}
-              >
-                <span>See more</span>
-                <span className="media-preview-more-count">
-                  {Math.max((totalMedia ?? mediaItems.length) - previewItems.length, 0)}+
-                </span>
-              </button>
+              { previewItems.length > PREVIEW_COUNT &&
+                <button
+                  type="button"
+                  className="media-preview-more"
+                  onClick={() => openMediaViewer(0)}
+                >
+                  <span>See more</span>
+                  <span className="media-preview-more-count">
+                    {Math.max((totalMedia ?? mediaItems.length) - previewItems.length, 0)}+
+                  </span>
+                </button>
+              }
             </>
           )}
 

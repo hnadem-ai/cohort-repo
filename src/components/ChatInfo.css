@@ -68,7 +68,6 @@
     width: 100%;
     gap: 2px;
     align-items: center;
-    justify-content: space-between;
 }
 
 .chat-info-media{

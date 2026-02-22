@@ -78,10 +78,10 @@ function NavBar({ selectedChat }){
 
     useSocketEvent('notification', (notification) => {
         setNotifications(prev => [notification, ...prev]);
-        if (!openNotification) {
+        if (!openNotification ) {
             setIsNewNotification(true);
         }
-    })
+    }, [openNotification, setIsNewNotification])
 
 
     function handleHomeClick(e) {

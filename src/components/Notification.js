@@ -132,21 +132,42 @@ export default function Notification({notification, setNotifications}){
             navigate('/crash');
         }
     }
-
-    let message = '';
+    let notificationImg;
+    let message;
     if (notification.type === 'friend_request_received') {
-        message = `${notification.sender.username} sent you a Friend Request!`
+        //message = `${notification.sender.username} sent you a Friend Request!`
+        message = (
+            <p><span className='notification-highlight'>{notification.sender.username}</span> sent you a Friend Request!</p>
+        )
+        notificationImg = notification.sender.dp;
     } else if (notification.type === 'friend_request_accepted') {
-        message = `${notification.sender.username} accepted your Friend Request!`
+        //message = `${notification.sender.username} accepted your Friend Request!`
+        message = (
+            <p><span className='notification-highlight'>{notification.sender.username}</span> accepted your Friend Request!</p>
+        )
+        notificationImg = notification.sender.dp;
     } else if (notification.type === 'added_to_group_request') {
-        message = `${notification.sender.username} wants you to join a new CohortBox: ${notification.chat.chatName}`
+        //message = `${notification.sender.username} wants you to join a new CohortBox: ${notification.chat.chatName}`
+        message = (
+            <p><span className='notification-highlight'>{notification.sender.username}</span> wants you to join a new CohortBox: <span className='notification-highlight-small bold'>{notification.chatName}</span></p>
+        )
+        notificationImg = notification.chat.chatDp;
     } else if (notification.type === 'accepted_group_request') {
-        message = `${notification.sender.username} accepted your request to join the CohortBox: ${notification.chat.chatName}`
+        //message = `${notification.sender.username} accepted your request to join the CohortBox: ${notification.chat.chatName}`
+        message = (
+            <p><span className='notification-highlight bold'>{notification.sender.username}</span> accepted your request to join the CohortBox: <span className='notification-highlight-small bold'>{notification.chat.chatName}</span></p>
+        )
+        notificationImg = notification.chat.chatDp;
+    } else if (notification.type === 'welcome'){
+        message = (
+            <p><span className='notification-highlight bold'>WELCOME</span> to CohortBox <span className='notification-highlight-small bold'>{user.username}</span></p>
+        )
+        notificationImg = notification.sender.dp;
     }
     if(notification.type === 'chat_participant_joined') return;
     return (
         <div className='notification-container'>
-            <img className='notification-img' src={sampleImg}/>
+            <img className='notification-img' src={notificationImg}/>
             <p className='notification-msg'>{message}</p>
             {
                 notification.type === 'friend_request_received' &&

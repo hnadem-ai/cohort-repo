@@ -259,13 +259,13 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
 
       // 3) after DOM updates, offset scrollTop by delta
       setTimeout(() => {
-        // const el2 = messagesBoxRef.current;
-        // if (!el2) return;
+        const el2 = messagesBoxRef.current;
+        if (!el2) return;
 
-        // const newScrollHeight = el2.scrollHeight;
-        // const delta = newScrollHeight - prevScrollHeight;
+        const newScrollHeight = el2.scrollHeight;
+        const delta = newScrollHeight - prevScrollHeight;
 
-        // el2.scrollTop = prevScrollTop + delta;
+        el2.scrollTop = prevScrollTop + delta;
       }, 0);
 
     } catch (e) {
