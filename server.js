@@ -1366,8 +1366,8 @@ app.get('/api/posts', authTokenAPI, async (req, res) => {
             .limit(limit)
             .lean(); // optional, improves performance if no Mongoose methods needed
 
-        if (!posts || posts.length === 0) {
-            return res.status(404).json({ message: 'No posts found!' });
+        if (posts.length === 0) {
+            return res.status(200).json({ posts: [] });
         }
 
         return res.status(200).json({ posts });
@@ -1399,8 +1399,8 @@ app.get('/api/chats', authTokenAPI, async (req, res) => {
             .limit(limit)
             .lean({ defaults: true });
 
-        if (!chats || chats.length === 0) {
-            return res.status(404).json({ message: 'No chats found!' });
+        if (chats.length === 0) {
+            return res.status(200).json({ chats: [] });
         }
 
         const chatsWithViewers = chats.map(chat => {
