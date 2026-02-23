@@ -598,6 +598,12 @@ function ChatsNav({ users, setUsers, chats, setChats, selectedChat, setSelectedC
             /* ================= NORMAL MODE ================= */
             !searchState && currFilter === 'cb' && (
               <>
+                {
+                  chats.length === 0 && (
+                    <p className='empty-para'>No chats to show right now!</p>
+                  )
+                }
+
                 {chats.map(chat => (
                   <NavChatButton
                     key={chat._id || chat.id}
@@ -627,6 +633,12 @@ function ChatsNav({ users, setUsers, chats, setChats, selectedChat, setSelectedC
           {
             !searchState && currFilter === 'people' && (
               <>
+                {
+                  users.length === 0 && (
+                    <p className='empty-para'>No Users to show right now!</p>
+                  )
+                }
+
                 {users.map(u => {
                   const id = String(u._id);
                   const isFriend = friendIds.has(id);
@@ -669,6 +681,12 @@ function ChatsNav({ users, setUsers, chats, setChats, selectedChat, setSelectedC
           {
             !searchState && currFilter === 'sub' && (
               <>
+                {
+                  subscribedChats.length === 0 && (
+                    <p className='empty-para'>You have not subscribed to any chats!</p>
+                  )
+                }
+
                 {subscribedChats.map(chat => (
                   <NavChatButton
                     key={chat._id || chat.id}
@@ -692,6 +710,12 @@ function ChatsNav({ users, setUsers, chats, setChats, selectedChat, setSelectedC
           {
             !searchState && currFilter === 'my' && (
               <>
+                {
+                  userChats.length === 0 && (
+                    <p className='empty-para'>You are not a part of any chat!</p>
+                  )
+                }
+
                 {userChats.map(chat => (
                   <NavChatButton
                     key={chat._id || chat.id}

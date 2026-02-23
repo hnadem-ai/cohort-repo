@@ -25,6 +25,10 @@ function Posts(){
                 return;
             }
             if(!response.ok){
+                if(response.status === 404){
+                    setPosts([]);
+                    return;
+                }
                 throw new Error('Request Failed!');
             }
             return response.json();

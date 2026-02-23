@@ -249,8 +249,6 @@ app.get(/^(?!\/api|\/socket\.io).*/, (req, res) => {
 });
 
 app.post("/api/signup", async (req, res) => { 
-    console.log(req.body);
-
     try {
         const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
 

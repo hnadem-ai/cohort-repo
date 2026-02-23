@@ -129,6 +129,12 @@
     cursor: pointer;
 }
 
+.empty-para{
+    font-size: 8px;
+    color: var(--small);
+    font-family: 'GR';
+}
+
 @media (max-width: 900px){
     .cn-container{
         width: 280px;

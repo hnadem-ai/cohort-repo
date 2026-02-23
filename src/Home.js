@@ -68,7 +68,13 @@ function Home() {
       credentials: 'include'
     })
       .then(response => {
-        if (!response.ok) throw new Error('Request Failed with Status: ' + response.status);
+        if (!response.ok) {
+          if(response.status === 404){
+            setChats([]);
+            return;
+          }
+          throw new Error('Request Failed with Status: ' + response.status);
+        }
         return response.json();
       })
       .then(data => setChats(data.chats))
