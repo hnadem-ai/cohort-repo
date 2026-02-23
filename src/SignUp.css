@@ -154,7 +154,7 @@
     width: 100%;
     padding: 0px 10px;
     border: 1px solid var(--small);
-    background-color: var(--searchBoxBg);
+    background-color: var(--chatBoxBg);
     font-size: 17px;
     color: var(--fontColor);
     transition-duration: 0.4s;
