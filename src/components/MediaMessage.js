@@ -16,7 +16,7 @@ export default function MediaMessage({ newSender, setIsReply, setRepliedTo, msg,
     const msgTime = new Date(msg.timestamp).getTime();
 
     // animate only if message is fresh (< 3s old)
-    if (now - msgTime > 3000) return;
+    if (now - msgTime > 200) return;
 
     setPop(true);
     const t = setTimeout(() => setPop(false), 220);

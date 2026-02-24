@@ -18,7 +18,7 @@ function NavBar({ selectedChat }){
     const [open, setOpen] = useState(false);
     const notificationBtnRef = useRef(null);
     const [notifications, setNotifications] = useState([]);
-    const [openNotification, setOpenNotification] = useState(false)
+    const [openNotification, setOpenNotification] = useState(false);
     const [isNewNotification, setIsNewNotification] = useState(false);
     const [userDB, setUserDB] = useState('');
 
@@ -78,10 +78,10 @@ function NavBar({ selectedChat }){
 
     useSocketEvent('notification', (notification) => {
         setNotifications(prev => [notification, ...prev]);
-        if (!openNotification ) {
+        if (!openNotification && notifications.length === 0) {
             setIsNewNotification(true);
         }
-    }, [openNotification, setIsNewNotification])
+    }, [notifications, openNotification, setIsNewNotification])
 
 
     function handleHomeClick(e) {

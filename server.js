@@ -2010,54 +2010,116 @@ app.post('/api/message', authTokenAPI, async (req, res) => {
     }
 })
 
-app.post('/api/chat', authTokenAPI, async (req, res) => {
-    try {
-        const {
-            requested_participants = [],
-            chatAdmin,
-            chatName,
-            chatNiche,
-            chatDp
-        } = req.body;
+app.post("/api/chat", authTokenAPI, upload.single("image"), async (req, res) => {
+  try {
+    const io = req.app.get("io"); // socket.io instance
+    const userId = req.user.id;
 
-        if (!mongoose.Types.ObjectId.isValid(req.user.id)) {
-            return res.status(400).json({ message: 'Invalid user ID!' });
-        }
-        const totalParticipants = (requested_participants?.length || 0) + 1;
-        if (totalParticipants < 3) {
-            console.warn('[start-chat] Not enough participants', { totalParticipants });
-            return res.status(404).json({ message: 'At least 3 participants are required to create a chat!' });
-        }
-
-        const participants = [req.user.id];
-
-        const newChat = new Chat({
-            chatAdmin,
-            chatName,
-            chatNiche,
-            chatDp,
-            requested_participants,
-            participants,
-            status: 'pending_requests'
-        });
-
-        await newChat.save();
-
-        await newChat.populate('requested_participants', '_id firstName lastName username dp');
-
-        // Push chat request to each requested participant
-        for (const participant of newChat.requested_participants) {
-            await User.findByIdAndUpdate(participant, {
-                $push: { chat_requests: newChat._id }
-            });
-        }
-
-        return res.status(200).json({ newChat });
-
-    } catch (err) {
-        console.error('[start-chat] SERVER_ERROR', err);
-        return res.status(500).json({ message: 'Server Error!' });
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "Invalid user ID!" });
     }
+
+    let {
+      requested_participants = "[]",
+      chatName,
+      chatNiche = "",
+    } = req.body;
+
+    // Parse array
+    try {
+      requested_participants = JSON.parse(requested_participants);
+      if (!Array.isArray(requested_participants)) requested_participants = [];
+    } catch {
+      return res.status(400).json({ message: "requested_participants must be a JSON array" });
+    }
+
+    if (!chatName || !chatName.trim()) {
+      return res.status(400).json({ message: "chatName is required" });
+    }
+
+    // Enforce admin = logged in user (don't trust client)
+    const chatAdmin = userId;
+
+    const totalParticipants = requested_participants.length + 1;
+    if (totalParticipants < 3) {
+      return res.status(400).json({ message: "At least 3 participants are required to create a chat!" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: "No image received" });
+    }
+
+    // 1) Create chat
+    const newChat = new Chat({
+      chatAdmin,
+      chatName: chatName.trim(),
+      chatNiche,
+      chatDp: "",
+      requested_participants,
+      participants: [userId],
+      status: "pending_requests",
+    });
+
+    await newChat.save();
+
+    // 2) Upload DP to R2
+    const ext =
+      mime.extension(req.file.mimetype) ||
+      path.extname(req.file.originalname || "").replace(".", "") ||
+      "jpg";
+
+    const key = `chat-dp/${newChat._id}/${crypto.randomUUID()}.${ext}`;
+
+    const { url } = await uploadBufferToR2({
+      key,
+      buffer: req.file.buffer,
+      contentType: req.file.mimetype,
+      cacheControl: "public, max-age=31536000, immutable",
+    });
+
+    if (!url) {
+      await Chat.findByIdAndDelete(newChat._id);
+      return res.status(500).json({ message: "R2 upload failed / R2_PUBLIC_BASE not configured" });
+    }
+
+    newChat.chatDp = url;
+    await newChat.save();
+
+    // 3) Push chat requests to each requested participant
+    for (const participantId of requested_participants) {
+      await User.findByIdAndUpdate(participantId, {
+        $push: { chat_requests: newChat._id },
+      });
+    }
+
+    // Populate for response + for notification payload
+    await newChat.populate("requested_participants", "_id firstName lastName username dp");
+
+    // 4) Create notifications + emit socket events (MERGED PART)
+    for (const participant of newChat.requested_participants) {
+      if (String(participant._id) === String(newChat.chatAdmin)) continue;
+
+      // Create notification in DB (match your schema fields)
+      const notification = await Notification.create({
+        user: participant._id,          // store ID (recommended)
+        sender: newChat.chatAdmin,
+        type: "added_to_group_request",
+        chat: newChat._id,
+        message: null,
+        text: "",
+      });
+
+      // Emit to that specific user room (requires socket to join userId room)
+      if (io) {
+        io.to(String(participant._id)).emit("notification", notification);
+      }
+    }
+
+    return res.status(200).json({ newChat, chatDpKey: key });
+  } catch (err) {
+    console.error("[start-chat] SERVER_ERROR", err);
+    return res.status(500).json({ message: "Server Error!" });
+  }
 });
 
 app.post("/api/upload-images", authTokenAPI, upload.array("media", 10), async (req, res) => {

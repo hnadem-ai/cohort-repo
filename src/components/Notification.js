@@ -1,7 +1,6 @@
 import './Notification.css';
-import sampleImg from '../images/sample.png';
 import { useAuth } from '../context/AuthContext';
-import { useSocket } from '../context/SocketContext';
+import { useSocket, useSocketEvent } from '../context/SocketContext';
 import accept from '../images/check-gray.png';
 import cancel from '../images/close-gray.png';
 import deleteIcon from '../images/trash-fontcolor.png';
@@ -21,6 +20,10 @@ export default function Notification({notification, setNotifications}){
         setToastMsg(msg);
         setShowToast(true)
     }
+
+    useSocketEvent('acceptFriendRequest', () => {
+
+    })
 
     const callApi = async (url, method, body = null) => {
         const res = await fetch(`${url}`, {

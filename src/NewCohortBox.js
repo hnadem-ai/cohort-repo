@@ -130,93 +130,40 @@ function NewCohortBox(){
             return;
         }
 
-        let requested_participants = [];
+        const requested_participants = members.map((m) => m._id);
 
-        for (let member of members) {
-            requested_participants.push(member._id);
-        }
-
+        // ✅ Send everything in ONE request (multipart/form-data)
         const formData = new FormData();
-        formData.append('image', dpFile);
-
-        const res = await fetch('/api/upload-chat-dp', {
-            method: 'POST',
-            headers: {
-                authorization: `Bearer ${accessToken}`,
-            },
-            body: formData,
-        });
-        if (!res.ok) {
-            showAlert("Image couldn't be uploaded! Try again.");
-            return;
-        }
-        const data = await res.json();
-
-        const body = {
-            requested_participants,
-            chatAdmin: user.id,
-            chatName,
-            chatNiche,
-            chatDp: data.url,
-            participants: [user.id]
-        }
+        formData.append("image", dpFile);
+        formData.append("chatName", chatName);
+        formData.append("chatNiche", chatNiche || "");
+        formData.append("requested_participants", JSON.stringify(requested_participants));
 
         try {
-            const response = await fetch('/api/chat', {
-                method: 'POST',
+            const response = await fetch("/api/chat", {
+                method: "POST",
                 headers: {
-                    'Content-Type': 'application/json',
                     authorization: `Bearer ${accessToken}`,
+                    // ❗ don't set Content-Type manually for FormData
                 },
-                body: JSON.stringify(body),
+                body: formData,
             });
 
             if (!response.ok) {
-                throw new Error('Start chat request failed');
+                const err = await response.json().catch(() => ({}));
+                showAlert(err.message || "Start chat request failed");
+                return;
             }
 
             const { newChat } = await response.json();
 
-            await Promise.all(
-                newChat.requested_participants.map(async (participant) => {
-                    console.log(participant)
-                    if (participant._id === newChat.chatAdmin) return;
-                    const notificationBody = {
-                        user: participant,
-                        sender: newChat.chatAdmin,
-                        type: 'added_to_group_request',
-                        chat: newChat._id,
-                        message: null,
-                        text: '',
-                    };
-
-                    const result = await fetch('/api/notification', {
-                        method: 'POST',
-                        headers: {
-                            authorization: `Bearer ${accessToken}`,
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(notificationBody),
-                    });
-
-                    if (!result.ok) {
-                        throw new Error('Notification request failed');
-                    }
-
-                    const { notification } = await result.json();
-                    socket.emit('notification', notification);
-                })
-            );
-
+            // ✅ Notifications are now created + emitted by backend
             navigate(`/${newChat._id}`);
-
         } catch (err) {
             console.error(err);
-            showAlert('Something went wrong while creating the chat.');
+            showAlert("Something went wrong while creating the chat.");
         }
-
     }
-
     // ---------- new-cohort-box === ncb ----------
 
     return (

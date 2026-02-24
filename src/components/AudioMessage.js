@@ -20,7 +20,7 @@ export default function AudioMessage({ newSender, setIsReply, setRepliedTo, msg,
         const msgTime = new Date(msg.timestamp).getTime();
 
         // animate only if message is fresh (< 3s old)
-        if (now - msgTime > 3000) return;
+        if (now - msgTime > 100) return;
         console.log('hello after pop true!')
         setPop(true);
         const t = setTimeout(() => setPop(false), 220);

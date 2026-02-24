@@ -159,31 +159,48 @@ function Home() {
   })
 
   useSocketEvent("message", (msg) => {
-    console.log('hello from messages')
-    if(msg.from._id === user.id) return;
-    if(userChats.some(uChat => String(msg.chatId) === String(uChat._id))){
-      console.log('true hogyay bhabhasbasdasdfasdfasdfasdfasdfasdfasdfasdfdhabsd');
-      if(String(msg.chatId) !== String(selectedChat._id) ) {
-        setNewMessageChatIds(prev => [...prev, msg.chatId]);
+    console.log('hello from messages');
+
+    // ✅ create a new message object with updated timestamp
+    const messageWithTimestamp = {
+      ...msg,
+      timestamp: Date.now(),
+    };
+
+    if (messageWithTimestamp.from._id === user.id) return;
+
+    if (userChats.some(uChat => String(messageWithTimestamp.chatId) === String(uChat._id))) {
+      if (String(messageWithTimestamp.chatId) !== String(selectedChat?._id)) {
+        setNewMessageChatIds(prev => [...prev, messageWithTimestamp.chatId]);
         setIsNewMessage(true);
       }
     }
-    const isForSelected = selectedChat && String(msg.chatId) === String(selectedChat._id);
+
+    const isForSelected =
+      selectedChat &&
+      String(messageWithTimestamp.chatId) === String(selectedChat._id);
 
     if (isForSelected) {
-      if (user?.id && String(msg.from) !== String(user.id)) {
-        markMessagesRead({ chatId: selectedChat._id, msgId: msg._id, to: msg.from });
+      if (user?.id && String(messageWithTimestamp.from._id) !== String(user.id)) {
+        markMessagesRead({
+          chatId: selectedChat._id,
+          msgId: messageWithTimestamp._id,
+          to: messageWithTimestamp.from._id,
+        });
       }
-      setMessages(prev => [msg, ...prev]);
+
+      setMessages(prev => [messageWithTimestamp, ...prev]);
+
     } else {
       setChats(prev =>
         prev.map(chat =>
-          String(chat._id) === String(msg.chatId)
+          String(chat._id) === String(messageWithTimestamp.chatId)
             ? { ...chat, noOfUnreadMessages: (chat.noOfUnreadMessages || 0) + 1 }
             : chat
         )
       );
     }
+
   }, [selectedChat?._id, user?.id]);
 
   useSocketEvent(

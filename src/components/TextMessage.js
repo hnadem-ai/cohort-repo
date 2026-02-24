@@ -15,20 +15,12 @@ export default function TextMessage({ newSender, setIsReply, setRepliedTo, msg, 
         const msgTime = new Date(msg.timestamp).getTime();
 
         // animate only if message is fresh (< 3s old)
-        if (now - msgTime > 3000) return;
+        if (now - msgTime > 100) return;
 
         setPop(true);
         const t = setTimeout(() => setPop(false), 220);
         return () => clearTimeout(t);
     }, [msg.timestamp]);
-
-    function groupReactions(reactions = []) {
-        const map = {};
-        for (let r of reactions) {
-            if (!map[r.emoji]) map[r.emoji] = 0;
-        }
-        return Object.entries(map).map(([emoji, count]) => ({ emoji, count }));
-    }
 
     function formatTime(ts) {
         const date = new Date(ts);
@@ -49,8 +41,8 @@ export default function TextMessage({ newSender, setIsReply, setRepliedTo, msg, 
                     <img className='msg-user-dp' src={msg.from.dp}/>
                 </div>
             }
-            <div className='msg-menu-btns-container'>
-                <div className={msg.from._id === user.id ? `my-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''} ${newSender ? 'right' : ''}  ${pop ? 'msg-pop' : ''}` : `other-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''} ${newSender ? 'left' : ''} ${pop ? 'msg-pop' : ''}`}>
+            <div className={`msg-menu-btns-container ${newSender ? 'right' : ''}`}>
+                <div className={msg.from._id === user.id ? `my-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''} ${pop ? 'msg-pop' : ''}` : `other-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''} ${newSender ? 'left' : ''} ${pop ? 'msg-pop' : ''}`}>
                     {msg.from._id !== user.id && sender && newSender && (
                         <p className='sender-name' style={{ color: `${senderColors[senderIndex]}` }}>{sender.username}</p>
                     )}
