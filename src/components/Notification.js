@@ -22,8 +22,8 @@ export default function Notification({notification, setNotifications}){
     }
 
     useSocketEvent('acceptFriendRequest', () => {
-
-    })
+        
+    }, [])
 
     const callApi = async (url, method, body = null) => {
         const res = await fetch(`${url}`, {

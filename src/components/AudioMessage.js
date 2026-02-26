@@ -50,8 +50,8 @@ export default function AudioMessage({ newSender, setIsReply, setRepliedTo, msg,
                     <img className='msg-user-dp' src={msg.from.dp} />
                 </div>
             }
-            <div className='msg-menu-btns-container'>
-                <div className={msg.from._id === user.id ? `my-media-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''} ${newSender ? 'right' : ''} ${pop ? 'msg-pop' : ''}` : `other-media-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''} ${newSender ? 'left' : ''} ${pop ? 'msg-pop' : ''}`}>
+            <div className={`msg-menu-btns-container ${newSender ? 'right' : ''}`}>
+                <div className={msg.from._id === user.id ? `my-media-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''} ${pop ? 'msg-pop' : ''}` : `other-media-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''} ${newSender ? 'left' : ''} ${pop ? 'msg-pop' : ''}`}>
                     {msg.from._id !== user.id &&
                         <div className='name-menu-container'>
                             {msg.from._id !== user.id && sender && newSender && (

@@ -7,27 +7,35 @@ import { useAuth } from './context/AuthContext';
 import Toast from './components/Toast';
 import { useSocket } from './context/SocketContext';
 import { Navigate, useNavigate } from 'react-router-dom';
+import LoadingScreen from './components/LoadingScreen';
 
 function NewCohortBox(){
     const [searchBarClass, setSearchBarClass] = useState(' hidden');
     const [members, setMembers] = useState([]);
     const [chatName, setChatName] = useState('');
     const [chatNiche, setChatNiche] = useState('');
-    const { user, accessToken } = useAuth();
+    const { user, accessToken, loading } = useAuth();
     const [preview, setPreview] = useState(null);
     const [dpFile, setDpFile] = useState(null);
     const [toastMsg, setToastMsg] = useState('');
     const [showToast, setShowToast] = useState(false);
+    const [initialLoad, setInitialLoad] = useState(true);
     const { socket } = useSocket();
     const [chatNameAvailable, setChatNameAvailable] = useState(null); // null | true | false
     const navigate = useNavigate();
 
 
     useEffect(() => {
-        if (!accessToken) {
+        if (!accessToken && !loading) {
             navigate('/login');
         }
     }, [accessToken]);
+
+    useEffect(() => {
+        setTimeout(() => {
+            setInitialLoad(false);
+        }, 750)
+    }, [setInitialLoad]);
 
     const chatNameDebounceRef = useRef(null);
 
@@ -167,62 +175,70 @@ function NewCohortBox(){
     // ---------- new-cohort-box === ncb ----------
 
     return (
-        <div className='ncb-container'>
-            <title>Create New CohortBox | CohortBox</title>
-            <NavBar />
-            <div className='ncb-body-container'>
-                <h4 className='ncb-heading'>START A NEW COHORT BOX</h4>
-                <div className='ncb-options-container'>
-                    <div className='ncb-select-members'>
-                        <SearchBar searchBarClass={searchBarClass} setSearchBarClass={setSearchBarClass} members={members} setMembers={setMembers} chatId={null} addParticipant={false} />
-                        <button className='ncb-select-members-btn' onClick={() => setSearchBarClass('')}>SELECT MEMBERS FOR YOUR COHORT BOX</button>
-                        {
-                            members.length > 0 ? (
-                                <p className='ncb-member-count'>{members.length} MEMBERS SELECTED</p>
-                            ) : (
-                                <p></p>
-                            )
-                        }
-                    </div>
-                    <div className='ncb-chatname'>
-                        <h4 style={{marginBottom: '2px'}} className='ncb-chatname-heading'>CHOOSE COHORT BOX NAME</h4>
-                        <p>This should be unique</p>
-                        <input className='ncb-chatname-input' type='text' placeholder='ENTER NAME' id='chatName' onChange={e => {
-                            setChatName(e.target.value);
-                            chatNameCheck(e.target.value);
-                        }} />
-                    </div>
-                    <div className='ncb-chatname'>
-                        <h4 className='ncb-chatname-heading'>SELECT COHORT BOX CHAT NICHE</h4>
-                        <input className='ncb-chatname-input' type='text' placeholder='ENTER CHAT NICHE' onChange={e => setChatNiche(e.target.value)}/>
-                    </div>
-                    <h4 className='ncb-chatname-heading'>CHAT DISPLAY PICTURE</h4>
-                    <div {...getRootProps({ className: 'ncb-dropzone' })}>
-                        <input {...getInputProps()} />
-                        {isDragActive ? (
-                            <p>Drop the photo here...</p>
-                        ) : (
-                            <p>Drag & drop a photo, or click to select one</p>
-                        )}
-                    </div>
+        <>
+            {
+                initialLoad ?
+                    <LoadingScreen /> :
 
-                    {preview && (
-                        <div className="preview-container">
-                            <img src={preview} alt="Preview" className="preview-image" />
+                    <div className='ncb-container'>
+                        <title>Create New CohortBox | CohortBox</title>
+                        <NavBar />
+                        <div className='ncb-body-container'>
+                            <h4 className='ncb-heading'>START A NEW COHORT BOX</h4>
+                            <div className='ncb-options-container'>
+                                <div className='ncb-select-members'>
+                                    <SearchBar searchBarClass={searchBarClass} setSearchBarClass={setSearchBarClass} members={members} setMembers={setMembers} chatId={null} addParticipant={false} />
+                                    <button className='ncb-select-members-btn' onClick={() => setSearchBarClass('')}>SELECT MEMBERS FOR YOUR COHORT BOX</button>
+                                    {
+                                        members.length > 0 ? (
+                                            <p className='ncb-member-count'>{members.length} MEMBERS SELECTED</p>
+                                        ) : (
+                                            <p></p>
+                                        )
+                                    }
+                                </div>
+                                <div className='ncb-chatname'>
+                                    <h4 style={{ marginBottom: '2px' }} className='ncb-chatname-heading'>CHOOSE COHORT BOX NAME</h4>
+                                    <p>This should be unique</p>
+                                    <input className='ncb-chatname-input' type='text' placeholder='ENTER NAME' id='chatName' onChange={e => {
+                                        setChatName(e.target.value);
+                                        chatNameCheck(e.target.value);
+                                    }} />
+                                </div>
+                                <div className='ncb-chatname'>
+                                    <h4 className='ncb-chatname-heading'>SELECT COHORT BOX CHAT NICHE</h4>
+                                    <input className='ncb-chatname-input' type='text' placeholder='ENTER CHAT NICHE' onChange={e => setChatNiche(e.target.value)} />
+                                </div>
+                                <h4 className='ncb-chatname-heading'>CHAT DISPLAY PICTURE</h4>
+                                <div {...getRootProps({ className: 'ncb-dropzone' })}>
+                                    <input {...getInputProps()} />
+                                    {isDragActive ? (
+                                        <p>Drop the photo here...</p>
+                                    ) : (
+                                        <p>Drag & drop a photo, or click to select one</p>
+                                    )}
+                                </div>
+
+                                {preview && (
+                                    <div className="preview-container">
+                                        <img src={preview} alt="Preview" className="preview-image" />
+                                    </div>
+                                )}
+
+                                <p className='ncb-note'>Note: Your image should be under 2MB.</p>
+
+                                <button className='ncb-add-btn' onClick={handleCreate}>CREATE</button>
+                            </div>
                         </div>
-                    )}
-
-                    <p className='ncb-note'>Note: Your image should be under 2MB.</p>
-
-                    <button className='ncb-add-btn' onClick={handleCreate}>CREATE</button>
-                </div>
-            </div>
-            <Toast
-                message={toastMsg}
-                show={showToast}
-                onClose={() => setShowToast(false)}
-            />
-        </div>
+                        <Toast
+                            message={toastMsg}
+                            show={showToast}
+                            onClose={() => setShowToast(false)}
+                        />
+                    </div>
+            }
+           
+        </>
     )
 }
 

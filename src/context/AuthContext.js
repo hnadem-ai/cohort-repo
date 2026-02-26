@@ -1,92 +1,108 @@
 import { useContext, useState, createContext, useEffect, useRef } from 'react';
 import { jwtDecode } from 'jwt-decode';
-import { useNavigate } from 'react-router-dom';
 
-const AuthContext = createContext()
+const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-    const [accessToken, setAccessToken] = useState('');
-    const [user, setUser] = useState(accessToken ? jwtDecode(accessToken) : null);
-    const refreshIntervalID = useRef(null);
-    const [loading, setLoading] = useState(true);
+  const [accessToken, setAccessToken] = useState(""); // keep it "" not null
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-    const login = (token) => {
-        setAccessToken(token);
-        setUser(jwtDecode(token))
+  const refreshIntervalID = useRef(null);
+  const refreshingRef = useRef(false);
+
+  const login = (token) => {
+    setAccessToken(token || "");
+    setUser(token ? jwtDecode(token) : null);
+  };
+
+  const logout = async () => {
+    try {
+      await fetch(`/api/logout`, {
+        method: 'POST',
+        headers: {
+          'authorization': accessToken ? `Bearer ${accessToken}` : ''
+        },
+        credentials: 'include'
+      });
+    } catch (err) {
+      console.log("Could not Logout! Error: ", err);
+    } finally {
+      if (refreshIntervalID.current) {
+        clearInterval(refreshIntervalID.current);
+        refreshIntervalID.current = null;
+      }
+      setAccessToken("");
+      setUser(null);
+    }
+  };
+
+  const refreshAccessToken = async () => {
+    if (refreshingRef.current) return null;
+    refreshingRef.current = true;
+
+    try {
+      const res = await fetch(`/api/refresh`, {
+        method: 'GET',
+        credentials: 'include'
+      });
+
+      // If refresh cookie expired/invalid, backend should return 401/403
+      if (!res.ok) {
+        return null;
+      }
+
+      const data = await res.json();
+
+      if (data?.accessToken) {
+        login(data.accessToken);
+        return data.accessToken;
+      }
+
+      return null;
+    } catch (err) {
+      console.error("Failed to refresh token", err);
+      return null;
+    } finally {
+      refreshingRef.current = false;
+    }
+  };
+
+  // ✅ On first load: ALWAYS attempt refresh before removing loading state
+  useEffect(() => {
+    (async () => {
+      const token = await refreshAccessToken();
+      // token may be null if user is logged out / refresh cookie expired
+      setLoading(false);
+    })();
+  }, []);
+
+  // ✅ Setup refresh interval when token exists
+  useEffect(() => {
+    if (refreshIntervalID.current) {
+      clearInterval(refreshIntervalID.current);
+      refreshIntervalID.current = null;
     }
 
-    const logout = async () => {
-        try{
-            console.log('Logging Out!')
-            await fetch(`/api/logout`, {
-                method: 'POST',
-                headers: {
-                    'authorization': `Bearer ${accessToken}`
-                },
-                credentials: 'include'
-            }) 
-            if (refreshIntervalID.current) {
-                clearInterval(refreshIntervalID.current);
-                refreshIntervalID.current = null;
-            }
-            setAccessToken(null);
-            setUser(null);
-        }catch(err){
-            console.log("Could not Logout! Error: ", err)
-        }
-       
+    if (accessToken) {
+      refreshIntervalID.current = setInterval(() => {
+        refreshAccessToken();
+      }, 9 * 60 * 1000);
     }
 
-    const refreshAccessToken = async () => {
-        try {
-            const res = await fetch(`/api/refresh`, {
-                method: 'GET',
-                credentials: 'include' // Needed if using HTTP-only cookie for refresh token
-            });
-            const data = await res.json();
-
-            if (data.accessToken) {
-                login(data.accessToken);
-            } else {
-                logout();
-            }
-        } catch (err) {
-            console.error("Failed to refresh token", err);
-            logout();
-        }
+    return () => {
+      if (refreshIntervalID.current) {
+        clearInterval(refreshIntervalID.current);
+        refreshIntervalID.current = null;
+      }
     };
+  }, [accessToken]);
 
-    useEffect(() => {
-        if(!accessToken){
-            setLoading(false)
-        }
-    }, [accessToken])
-
-    useEffect(() => {
-        const initAuth = async () => {
-            if (!accessToken) {
-                await refreshAccessToken();
-            }
-        }
-        initAuth();
-    }, []);
-
-    useEffect(() => {
-        if (refreshIntervalID.current) {
-                clearInterval(refreshIntervalID.current);
-        }
-        if(accessToken){
-            refreshIntervalID.current = setInterval(() => {
-                refreshAccessToken();
-            }, 9 * 60 * 1000)
-        }
-    }, [accessToken])
-
-    return (
-        <AuthContext.Provider value = {{accessToken, loading, user, login, logout}}>
-            {children}
-        </AuthContext.Provider>
-    )
-}
+  return (
+    <AuthContext.Provider value={{ accessToken, loading, user, login, logout, refreshAccessToken }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
 
 export const useAuth = () => useContext(AuthContext);

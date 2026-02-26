@@ -24,7 +24,7 @@ import { ReactComponent as MyIcon } from '../images/comment.svg';
 
 
 function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, messages, setMessages, typingUsers, setShowLiveChat, showLiveChat, focusMessageId, clearFocus }) {
-  console.log(focusMessageId)
+
   const senderColors = ['#c76060', '#c79569', '#c7c569', '#6ec769', '#69c2c7', '#6974c7', '#9769c7', '#c769bf']
 
   const { socket } = useSocket();
@@ -54,6 +54,7 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
   const msgRef = useRef(null);
   const msgRefs = useRef({});
   const caretPosRef = useRef(0);
+  const restoreRef = useRef(null); 
   const PAGE_SIZE = 20;
 
   const { refs, floatingStyles } = useFloating({
@@ -65,6 +66,12 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
   const navigate = useNavigate();
 
   const isFocusingRef = useRef(false);
+
+  const messagesRef = useRef([]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     if (!focusMessageId) return;
@@ -89,7 +96,7 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
     if (!el) return;
 
     el.scrollTo({
-      top: el.scrollHeight,
+      top: 0,
       behavior: smooth ? "smooth" : "auto",
     });
 
@@ -100,7 +107,7 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
     const el = messagesBoxRef.current;
     if (!el) return true;
 
-    return el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+    return el.scrollTop < threshold;
   }
 
   useEffect(() => {
@@ -221,26 +228,32 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
   }, [showEmoji]);
 
   async function loadOlderMessages() {
-    if (!selectedChat) return;
-    if (!hasMoreMsgs) return;
-    if (loadingMoreRef.current) return;
+    if (!selectedChat || !hasMoreMsgs || loadingMoreRef.current) return;
 
     const el = messagesBoxRef.current;
     if (!el) return;
 
-    // 1) capture BEFORE values
+    const chatId = selectedChat._id;
+
     const prevScrollHeight = el.scrollHeight;
     const prevScrollTop = el.scrollTop;
+
+    restoreRef.current = {
+      prevScrollTop: el.scrollTop,
+    };
+
+    console.log(restoreRef.current);
 
     try {
       setLoadingMore(true);
       loadingMoreRef.current = true;
 
-      const oldest = messages[messages.length - 1];
+      const currentMsgs = messagesRef.current;
+      const oldest = currentMsgs[currentMsgs.length - 1];
       if (!oldest?._id) return;
 
       const res = await fetch(
-        `/api/messages/${encodeURIComponent(selectedChat._id)}?limit=${PAGE_SIZE}&before=${oldest._id}`,
+        `/api/messages/${encodeURIComponent(chatId)}?limit=${PAGE_SIZE}&before=${oldest._id}`,
         { method: "GET", headers: { authorization: `Bearer ${accessToken}` } }
       );
 
@@ -253,20 +266,11 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
         return;
       }
 
-      // 2) update messages
-      setMessages(prev => [...prev, ...olderBatch]);
+      // if user switched chats while fetching, don't apply
+      if (chatId !== selectedChat._id) return;
+
+      setMessages(prev => [...prev, ...olderBatch]); // or prepend depending on your ordering
       setHasMoreMsgs(Boolean(data.hasMore));
-
-      // 3) after DOM updates, offset scrollTop by delta
-      setTimeout(() => {
-        const el2 = messagesBoxRef.current;
-        if (!el2) return;
-
-        const newScrollHeight = el2.scrollHeight;
-        const delta = newScrollHeight - prevScrollHeight;
-
-        el2.scrollTop = prevScrollTop + delta;
-      }, 0);
 
     } catch (e) {
       console.error(e);
@@ -276,6 +280,19 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
       loadingMoreRef.current = false;
     }
   }
+
+  useLayoutEffect(() => {
+    console.log(restoreRef.current)
+    const el = messagesBoxRef.current;
+    const snap = restoreRef.current;
+    if (!el || !snap) return;
+
+    // ✅ for column-reverse with negative scrollTop: preserve raw scrollTop
+    el.scrollTop = snap.prevScrollTop;
+
+    restoreRef.current = null;
+  }, [messages.length]);
+
   useEffect(() => {
     if (!selectedChat) return;
 
@@ -406,15 +423,18 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
     if (!el) return;
 
     function onScroll() {
-      // when near top, load older
-      if (el.scrollTop <= 40) {
+      const maxScrollTop = el.scrollHeight - el.clientHeight;
+  
+      if (Math.abs(maxScrollTop + el.scrollTop) <= 40) {
+        if (loadingMoreRef.current || !hasMoreMsgs) return;
+        console.log('hello from the otherside')
         loadOlderMessages();
       }
     }
 
     el.addEventListener("scroll", onScroll);
     return () => el.removeEventListener("scroll", onScroll);
-  }, [messages, hasMoreMsgs, selectedChat, accessToken]);
+  }, [selectedChat?._id]);
 
   function handleSubscribe(e) {
     e.preventDefault();

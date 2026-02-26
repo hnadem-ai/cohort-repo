@@ -61,9 +61,9 @@ export default function MediaMessage({ newSender, setIsReply, setRepliedTo, msg,
           <img className='msg-user-dp' src={msg.from.dp} />
         </div>
       }
-      <div className='msg-menu-btns-container'>
+      <div className={`msg-menu-btns-container ${newSender ? 'right' : ''}`}>
         {msg.media.length > 0 && msg.media.length <= 2 ? (
-          <div className={msg.from._id === user.id ? `my-media-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''} ${newSender ? 'right' : ''} ${pop ? 'msg-pop' : ''}` : `other-media-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''} ${newSender ? 'left' : ''} ${pop ? 'msg-pop' : ''}`}>
+          <div className={msg.from._id === user.id ? `my-media-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''}${pop ? 'msg-pop' : ''}` : `other-media-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''} ${newSender ? 'left' : ''} ${pop ? 'msg-pop' : ''}`}>
             <div className='name-menu-container'>
               {msg.from._id !== user.id && sender && newSender && (
                 <h4 className='sender-name' style={{ color: `${senderColors[senderIndex] ? senderColors[senderIndex] : '#c5cad3'}` }}>{sender.username}</h4>
@@ -113,7 +113,7 @@ export default function MediaMessage({ newSender, setIsReply, setRepliedTo, msg,
           </div>
         ) : msg.media.length === 3 ? (
           <div className={user.id === msg.from._id ? 'my-msg-container' : 'other-msg-container'}>
-            <div className={msg.from._id === user.id ? `my-media-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''} ${newSender ? 'right' : ''} ${pop ? 'msg-pop' : ''}` : `other-media-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''} ${newSender ? 'left' : ''} ${pop ? 'msg-pop' : ''}`}>
+            <div className={msg.from._id === user.id ? `my-media-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''} ${pop ? 'msg-pop' : ''}` : `other-media-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''} ${newSender ? 'left' : ''} ${pop ? 'msg-pop' : ''}`}>
               {user.id === msg.from._id &&
                 <div className='name-menu-container'>
                   {msg.from._id !== user.id && sender && newSender && (
@@ -166,7 +166,7 @@ export default function MediaMessage({ newSender, setIsReply, setRepliedTo, msg,
           </div>
         ) : (
           <div className={user.id === msg.from._id ? 'my-msg-container' : 'other-msg-container'}>
-            <div className={msg.from._id === user.id ? `my-media-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''} ${newSender ? 'right' : ''} ${pop ? 'msg-pop' : ''}` : `other-media-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''} ${newSender ? 'left' : ''} ${pop ? 'msg-pop' : ''}`}>
+            <div className={msg.from._id === user.id ? `my-media-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''}${pop ? 'msg-pop' : ''}` : `other-media-msg ${msg?.reactions?.length > 0 ? 'has-reactions' : ''} ${newSender ? 'left' : ''} ${pop ? 'msg-pop' : ''}`}>
               <div className='name-menu-container'>
                 {msg.from._id !== user.id && sender && newSender && (
                   <h4 className='sender-name' style={{ color: `${senderColors[senderIndex]}` }}>{sender.username}</h4>

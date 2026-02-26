@@ -9,6 +9,7 @@ import ChatBox from './components/ChatBox';
 import Posts from './components/Posts'
 import LiveChatView from './components/LiveChatCommentsView';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import LoadingScreen from './components/LoadingScreen';
 
 function Home() {
   const paramChatId = useParams().chatId;
@@ -23,6 +24,7 @@ function Home() {
   const [userChats, setUserChats] = useState([]);
   const [isNewMessage, setIsNewMessage] = useState(false);
   const [newMessageChatIds, setNewMessageChatIds] = useState([]);
+  const [initialLoad, setInitialLoad] = useState(true);
   const location = useLocation();
   const focusMessageId = location.state?.focusMessageId ?? null;
 
@@ -117,6 +119,16 @@ function Home() {
         navigate('/crash');
       });
   }, [accessToken, loading]);
+
+  useEffect(() => {
+    if(!loading && !accessToken){
+      navigate('/login');
+    }
+
+    setTimeout(() => {
+      setInitialLoad(false);
+    }, 750)
+  }, [accessToken, loading, setInitialLoad])
 
   const updateReactions = (existing = [], data) => {
     const filtered = existing.filter(r => String(r.userId) !== String(data.userId));
@@ -303,33 +315,40 @@ function Home() {
   if (!accessToken) return null;
 
   return (
-    <div className="home">
-      <title>Home | CohortBox</title>
-      <NavBar selectedChat={selectedChat}/>
-      <HomeNav newMessageChatIds={newMessageChatIds} setNewMessageChatIds={setNewMessageChatIds} isNewMessage={isNewMessage} setIsNewMessage={setIsNewMessage} users={users} setUsers={setUsers} chats={chats} setChats={setChats} selectedChat={selectedChat} setSelectedChat={setSelectedChat} userChats={userChats} setUserChats={setUserChats} />
-      {selectedChat ? (
-        <div className='chat-box-live-chat-container'>
-          <ChatBox
-            setChats={setChats}
-            paramChatId={paramChatId}
-            selectedChat={selectedChat}
-            setSelectedChat={setSelectedChat}
-            messages={messages}
-            setMessages={setMessages}
-            typingUsers={typingUsers}
-            setShowLiveChat={setShowLiveChat}
-            showLiveChat={showLiveChat}
-            focusMessageId={focusMessageId}
-            clearFocus={clearFocus}
-          />
-          { showLiveChat &&
-            <LiveChatView selectedChat={selectedChat} setShowLiveChat={setShowLiveChat}/>
-          }  
-        </div>
-      ) : (
-        <Posts />
-      )}
-    </div>
+    <>
+      {
+        initialLoad ?
+        <LoadingScreen /> :
+
+        <div className="home">
+        <title>Home | CohortBox</title>
+        <NavBar selectedChat={selectedChat}/>
+        <HomeNav newMessageChatIds={newMessageChatIds} setNewMessageChatIds={setNewMessageChatIds} isNewMessage={isNewMessage} setIsNewMessage={setIsNewMessage} users={users} setUsers={setUsers} chats={chats} setChats={setChats} selectedChat={selectedChat} setSelectedChat={setSelectedChat} userChats={userChats} setUserChats={setUserChats} />
+        {selectedChat ? (
+          <div className='chat-box-live-chat-container'>
+            <ChatBox
+              setChats={setChats}
+              paramChatId={paramChatId}
+              selectedChat={selectedChat}
+              setSelectedChat={setSelectedChat}
+              messages={messages}
+              setMessages={setMessages}
+              typingUsers={typingUsers}
+              setShowLiveChat={setShowLiveChat}
+              showLiveChat={showLiveChat}
+              focusMessageId={focusMessageId}
+              clearFocus={clearFocus}
+            />
+            { showLiveChat &&
+              <LiveChatView selectedChat={selectedChat} setShowLiveChat={setShowLiveChat}/>
+            }  
+          </div>
+        ) : (
+          <Posts />
+        )}
+      </div>
+      }
+    </>
   );
 }
 
