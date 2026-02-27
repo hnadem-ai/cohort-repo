@@ -21,9 +21,6 @@ function Posts(){
                 'authorization': `Bearer ${accessToken}`
             }
         }).then(response => {
-            if(response.status === 404){
-                return;
-            }
             if(!response.ok){
                 if(response.status === 404){
                     setPosts([]);

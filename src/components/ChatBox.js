@@ -20,6 +20,7 @@ import TextMessage from './TextMessage.js';
 import MediaMessage from './MediaMessage.js';
 import AudioMessage from './AudioMessage.js';
 import ChatInfoMessage from './ChatInfoMessage.js';
+import LoadingMessages from './LoadingMessages.js';
 import { ReactComponent as MyIcon } from '../images/comment.svg';
 
 
@@ -436,6 +437,22 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
     return () => el.removeEventListener("scroll", onScroll);
   }, [selectedChat?._id]);
 
+  useEffect(() => {
+    if (!selectedChat) return;
+    if (focusMessageId) return;
+    scrollToBottom(false);
+  }, [selectedChat._id]);
+
+  useEffect(() => {
+    if (!selectedChat) {
+      setMessages([]);
+      return;
+    }
+
+    setMessages([]);
+    setHasMoreMsgs(true);
+  }, [selectedChat?._id]);
+
   function handleSubscribe(e) {
     e.preventDefault();
     fetch('/api/chat/subscribe', {
@@ -816,6 +833,8 @@ function ChatBox({ setChats, paramChatId, selectedChat, setSelectedChat, message
         </div>)
       }
       <div className='messages-box' ref={messagesBoxRef}>
+
+        {loadingMore && messages.length === 0 && <LoadingMessages />}
 
         {/* ✅ Typing indicator */}
         {typingUsers.length > 0 && (

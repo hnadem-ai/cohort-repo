@@ -57,7 +57,7 @@ function Profile() {
         setTimeout(() => {
             setInitialLoad(false);
         }, 750)
-    }, [setInitialLoad]);
+    }, [setInitialLoad, id]);
 
     useEffect(() => {
         function handleClickOutside(e) {

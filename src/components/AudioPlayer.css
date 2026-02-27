@@ -24,42 +24,40 @@
 }
 
 .audio-slider {
+  -webkit-appearance: none;
   flex: 1;
-  height: 100px;
-  border-radius: 5px;
-  background: transparent; /* let track control colors */
-  outline: none;
+  background: transparent;
   cursor: pointer;
 }
 
-/* Track (unplayed + played in WebKit browsers) */
+/* Track */
 .audio-slider::-webkit-slider-runnable-track {
-  height: 2px;
+  height: 4px;
   border-radius: 10px;
   background: linear-gradient(
     to right,
-    var(--green) 0%,
-    var(--green) var(--progress, 0%),
-    #1ff200 var(--progress, 0%),
-    #1ff200 100%
+    #00ff88 0%,
+    #00ff88 var(--progress, 0%),
+    #1a1a1a var(--progress, 0%),
+    #1a1a1a 100%
   );
-  border: none;
 }
 
 /* Thumb */
 .audio-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  appearance: none;
-  border: none;
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  color: #1ff200;
-  background: #1ff200;
-  cursor: pointer;
-  margin-top: -7px; /* center thumb vertically */
+  background: #00ff88;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  margin-top: -5px;
 }
 
+/* Hover */
+.audio-slider:hover::-webkit-slider-thumb {
+  transform: scale(1.2);
+}
 .audio-time {
   font-size: 12px;
   color: var(--fontColor);

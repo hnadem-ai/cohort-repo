@@ -38,7 +38,7 @@ function Home() {
     if(!accessToken && !loading){
       navigate('/login');
     }
-  },[accessToken]);
+  },[accessToken, loading]);
 
   useEffect(() => {
     if (!accessToken || !paramChatId || loading) return;
@@ -121,14 +121,10 @@ function Home() {
   }, [accessToken, loading]);
 
   useEffect(() => {
-    if(!loading && !accessToken){
-      navigate('/login');
-    }
-
     setTimeout(() => {
       setInitialLoad(false);
     }, 750)
-  }, [accessToken, loading, setInitialLoad])
+  }, [setInitialLoad])
 
   const updateReactions = (existing = [], data) => {
     const filtered = existing.filter(r => String(r.userId) !== String(data.userId));
